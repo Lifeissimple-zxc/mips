@@ -1,0 +1,22 @@
+# Igoring venv folder
+env/
+
+# Ignoring test & play scripts
+play_*.py
+play.py
+
+# Ignoring secrets & env vars
+secrets/
+.env
+
+# Ignoring garbage
+__pycache__/
+
+# IDE stuff
+.vscode/
+
+# heavy files
+logs/
+*.log
+*.db
+*.csv

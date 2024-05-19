@@ -1,0 +1,38 @@
+version: 1
+
+formatters:
+  main:
+    format: "[%(asctime)s - %(name)s - %(levelname)s - %(filename)s::%(lineno)d - %(funcName)s()]\t %(message)s"
+
+# TODO add TG logging: https://github.com/Lifeissimple-zxc/amst_re/blob/main/config/logging_config.yaml
+
+handlers:
+  StreamHandler:
+    class: "logging.StreamHandler"
+    formatter: "main"
+  BackupFileHandler:
+    class: "lib.internal.logger.BackupFileHandler"
+    formatter: "main"
+    folder: "logs"
+    file: "mips_automation.log"
+
+  ZZZQListenerHandler:
+    (): "lib.internal.logger.QListenerHandler"
+    queue: "ext://lib.internal.logger._LOG_QUEUE"
+    handler_list:
+      - "cfg://handlers.BackupFileHandler"
+      # - "cfg://handlers.TGErrorHandler"
+
+loggers:
+  main_logger:
+    level: "DEBUG"
+    handlers:
+      - "StreamHandler"
+      - "ZZZQListenerHandler"
+    propagate: false
+  backup_logger:
+    level: "DEBUG"
+    handlers:
+      - "StreamHandler"
+      - "BackupFileHandler"
+    propagate: false

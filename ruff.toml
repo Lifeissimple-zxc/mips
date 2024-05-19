@@ -1,0 +1,25 @@
+line-length = 80 # max-line-length
+target-version = "py39"
+
+# This controls what rules we enforce
+extend-select = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D419",
+    "S110",
+    "S112",
+    "I001",
+    "E501"
+]
+
+extend-exclude = [
+    "env",
+    ".yaml",
+    "__init__.py"
+]
