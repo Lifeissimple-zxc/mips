@@ -3,7 +3,7 @@ Module implements client for interacting with DC MIPS api.
 """
 import logging
 import re
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 
@@ -11,9 +11,14 @@ from lib.gateway.base import gw
 
 log = logging.getLogger("main_logger")
 
-# TODO implement needs_auth decorator
 # TODO server error retries
 # TODO implement retries and RPS throttling
+# TODO implement bulk patch method (needs to be concurrent)
+# TODO implement retry logic for InvalidAUTHError
+# TODO gsheet
+# TODO telegram logging
+# TODO configuration
+# TODO tests
 
 
 # urls and endpoint paths
@@ -22,10 +27,11 @@ AUTH_PATH = "signin"
 GET_DEVICES_PATH = "devices-mips"
 PATCH_BACKLIGHT_PATH = "devices/rpc-backlight"
 GET_BACKLIGHT_SETTINGS_PATH = "devices/rpc-initial-backlight"
+GET_DEVICE_TASKS_PATH = "device/task/list"
 
 # other module level constants
 CLIENT_LANG = "en"
-JS_NEEDED_SUBSTRING = "trunk_1.0.0 doesn't work properly without JavaScript enabled substring in r.text"  # noqa: E501
+JS_NEEDED_SUBSTRING = "trunk_1.0.0 doesn't work properly without JavaScript enabled"  # noqa: E501
 BACKLIGHT_STATUS_KEY = "is_blacklight"
 
 # request params
@@ -40,7 +46,7 @@ class InvalidAUTHError(Exception):
 def response_to_exception(r: requests.Response) -> Exception:
     "Converts status code of a response to an exception"
     if r.status_code == 200:
-        if re.search(pattern=JS_NEEDED_SUBSTRING, string=r.text):
+        if re.search(pattern=JS_NEEDED_SUBSTRING, string=r.text): 
             return InvalidAUTHError(f"auth is invalid. response text: {r.text}")
         return
     msg = f"status code: {r.status_code}. details: {r.text}"
@@ -77,7 +83,7 @@ def _get_devices_param_to_request(
 def _patch_backlight_params_to_request(
     device_id: int,
     switch_status: int) -> requests.Request:
-    if switch_status not in {RPC_BACKLIGHT_OFF_STATUS, RPC_BACKLIGHT_ON_STATUS}:
+    if switch_status not in {RPC_BACKLIGHT_OFF_STATUS, RPC_BACKLIGHT_ON_STATUS}:  # noqa: E501
         raise ValueError(f"unexpected switch status: {switch_status}")
     return requests.Request(
         method="PUT",
@@ -99,12 +105,37 @@ def _get_backlight_settings_params_to_request(device_id: int) -> requests.Reques
         }
     )
 
+def _get_device_task_list_params_to_request(device_id: int) -> requests.Request:
+    return requests.Request(
+        method="GET",
+        url=f"{BASE_URL}/{GET_DEVICE_TASKS_PATH}",
+        params={
+            "deviceId": device_id,
+            "page": 1,
+            "per_page": 10,
+            "perPage": 10,
+            "sort": "startTime"
+        }
+    )
+
 
 class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
     def __init__(self, user: str, password: str, timeout: int,
                  auto_auth: Optional[bool] = None):
+        """Instantiates MIPS client
+
+        Args:
+            user (str): username to use for auth
+            password (str): password for auth
+            timeout (int): timeout of a single request in seconds.
+            auto_auth (bool): True means auth is performed on __init__. Defaults to True.
+
+        Raises:
+            e: _description_
+        """  # noqa: E501
+                
         if auto_auth is None:
             auto_auth = True
         # saving auth data within self to re-auth when needed
@@ -113,9 +144,8 @@ class MIPSClient(gw.HTTPClient):
             "password": password,
             "lang": CLIENT_LANG
         }
-        self.timeout = timeout
         self.__ok_auth = False
-        super().__init__()
+        super().__init__(timeout=timeout)
         if not auto_auth:
             return
         if (e := self.auth()) is None:
@@ -145,8 +175,17 @@ class MIPSClient(gw.HTTPClient):
         # getting here means we are ok
         self.__ok_auth = True
         self.sesh.cookies = r.cookies
-        log.debug("auth ok, cookies updated. len: %s", len(self.sesh.cookies.items()))
+        log.debug("auth ok, cookies updated. len: %s", len(self.sesh.cookies.items()))  # noqa: E501
         
+    def needs_auth(method: Callable):
+        "Decorator to enforce auth for calling endpoints requiring it"
+        def wrapper(self, *args, **kwargs):
+            if not self.__ok_auth:
+                self.auth()
+            return method(self, *args, **kwargs)
+        return wrapper
+    
+    @needs_auth
     def get_devices(self, results: Optional[list] = None,
                     page: Optional[int] = None,
                     is_online: Optional[bool] = None) -> tuple:
@@ -172,6 +211,7 @@ class MIPSClient(gw.HTTPClient):
             is_online=is_online
         )
     
+    @needs_auth
     def patch_backlight(self, device_id: int, switch_status: int) -> Exception:
         "Patches backlight settings of a single device"
         try:
@@ -184,6 +224,7 @@ class MIPSClient(gw.HTTPClient):
         r = self.make_request(req=req)
         return response_to_exception(r=r)
         
+    @needs_auth
     def get_backlight_settings(self, device_id: int,
                                only_status: Optional[bool] = None) -> tuple:
         "Fetches backlight settings from MIPS backend"
@@ -201,8 +242,19 @@ class MIPSClient(gw.HTTPClient):
         try:
             return int(body[BACKLIGHT_STATUS_KEY]), None
         except KeyError:
-            return None, ValueError(f"response body has not data for {BACKLIGHT_STATUS_KEY}")
+            return None, ValueError(f"response body has not data for {BACKLIGHT_STATUS_KEY}")  # noqa: E501
                 
+    @needs_auth
+    def get_device_task_list(self, device_id: int) -> tuple:
+        "Fetches most recent tasks associated with a device id"
+        r = self.make_request(
+            req=_get_device_task_list_params_to_request(device_id=device_id)
+        )
+        if (e := response_to_exception(r=r)) is not None:
+            return None, e
+        return r.json(), None
+    
+    @needs_auth
     def patch_backlight_and_validate(self, device_id: int, switch_status: int) -> Exception:  # noqa: E501
         """Calls patch_backlight and get_backlight_settings to patch backlight and double check the change. 
 
@@ -213,7 +265,8 @@ class MIPSClient(gw.HTTPClient):
         Returns:
             Exception: error if any
         """  # noqa: E501
-        patch_err = self.patch_backlight(device_id=device_id, switch_status=switch_status)
+        patch_err = self.patch_backlight(device_id=device_id,
+                                         switch_status=switch_status)
         if patch_err is not None:
             return patch_err
         bl_status, e = self.get_backlight_settings(device_id=device_id)
@@ -221,8 +274,9 @@ class MIPSClient(gw.HTTPClient):
             return e
         if bl_status != switch_status:
             return ValueError(
-                f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"
+                f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
             )
+    # patch_backlight_and_validate_bulk() needs to be concurrent TODO
     # get device task list (paginated) TODO decide if implementation is needed.
         
         
