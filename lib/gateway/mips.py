@@ -3,7 +3,8 @@ Module implements client for interacting with DC MIPS api.
 """
 import logging
 import re
-from typing import Callable, Optional
+from concurrent import futures
+from typing import Callable, Optional, Sequence
 
 import requests
 
@@ -11,9 +12,7 @@ from lib.gateway.base import gw
 
 log = logging.getLogger("main_logger")
 
-# TODO server error retries
 # TODO implement retries and RPS throttling
-# TODO implement bulk patch method (needs to be concurrent)
 # TODO implement retry logic for InvalidAUTHError
 # TODO gsheet
 # TODO telegram logging
@@ -33,6 +32,8 @@ GET_DEVICE_TASKS_PATH = "device/task/list"
 CLIENT_LANG = "en"
 JS_NEEDED_SUBSTRING = "trunk_1.0.0 doesn't work properly without JavaScript enabled"  # noqa: E501
 BACKLIGHT_STATUS_KEY = "is_blacklight"
+THREAD_PREFIX = "mips_"
+DEFAULT_THREAD_COUNT = 20
 
 # request params
 RPC_BACKLIGHT_ON_STATUS = 1
@@ -276,8 +277,48 @@ class MIPSClient(gw.HTTPClient):
             return ValueError(
                 f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
             )
-    # patch_backlight_and_validate_bulk() needs to be concurrent TODO
-    # get device task list (paginated) TODO decide if implementation is needed.
+    
+    @needs_auth
+    def patch_backlight_and_validate_bulk(
+        self, devices: Sequence[int],
+        switch_staus: int, th_cap: Optional[int] = None
+    ) -> list:
+        """Calls patch_backlight_and_validate for a sequence of device ids
+
+        Args:
+            devices (Sequence[int]): sequence of device ids to process.
+            switch_staus (int): backlight status to apply.
+            th_cap (int, optional): max count of worker threads. Defaults to 20.
+
+        Returns:
+            list: each entry follows {device_id: error}, ok executions will have None error. 
+        """  # noqa: E501
+        if th_cap is None:
+            th_cap = DEFAULT_THREAD_COUNT
+        result = []
+        log.debug("starting bulk patching and validation for %s devices with %s threads", len(devices), th_cap)  # noqa: E501
+        with futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix=THREAD_PREFIX) as ex:  # noqa: E501
+            # futures as hashable, using them as keys
+            # because it's better for as_completed()
+            futures_to_devices = {
+                ex.submit(self.patch_backlight_and_validate, d, switch_staus): d
+                for d in devices
+            }
+            # passing futures_to_devices makes as_completed iterate over keys
+            # key are concurrent's futures so this is exactly what we need
+            for f in futures.as_completed(futures_to_devices):
+                device = futures_to_devices[f]
+                try:
+                    patch_err = f.result()
+                except Exception as e:
+                    log.debug("patch and validate failed for %s: %s", device, e)
+                    result.append({device: e})
+                else:
+                    result.append({device: patch_err})
+        return result
+
+    # get device task list (paginated)
+        # TODO decide if implementation is needed after testing with EE OPS
         
         
     
