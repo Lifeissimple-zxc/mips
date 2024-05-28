@@ -32,6 +32,7 @@ class HTTPClient:
 
     def make_request(self, req: requests.Request) -> requests.Response:
         # TODO add RPS limiting and retries
+        # TODO log body?
         log.debug("making %s req to %s", req.method, req.url)
         r = self.sesh.send(
             request=self.sesh.prepare_request(request=req),

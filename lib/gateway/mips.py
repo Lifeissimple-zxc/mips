@@ -4,7 +4,7 @@ Module implements client for interacting with DC MIPS api.
 import logging
 import re
 from concurrent import futures
-from typing import Callable, Optional, Sequence
+from typing import Callable, List, Optional
 
 import requests
 
@@ -120,6 +120,30 @@ def _get_device_task_list_params_to_request(device_id: int) -> requests.Request:
     )
 
 
+class MIPSTask:
+    "Abstraction for running MIPS requests with concurrent.futures"
+    def __init__(self, fn: Callable, *args, **kwargs):
+        "Constructs a task and saves the func to call within self"
+        self.cancelled = False
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+    
+    def __call__(self):
+        "Makes instance of this class a function"
+        if self.cancelled:
+            log.debug("task %s with args %s kwargs %s was cancelled",
+                      self.fn.__class__, self.args, self.kwargs)
+            return
+        log.debug("executing task %s with args %s kwargs %s",
+                  self.fn.__class__, self.args, self.kwargs)
+        return self.fn(*self.args, **self.kwargs)
+    
+    def cancel(self):
+        "Cancels a task"
+        self.cancelled = True
+
+
 class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
@@ -202,7 +226,7 @@ class MIPSClient(gw.HTTPClient):
             return None, e
         resp_body = r.json()
         pagination = resp_body["pagination"]
-        # reaching max page is base case where we return
+        # reaching max page is the base case where we return
         if pagination["page"] == pagination["max"]:
             return results + resp_body["data"], None
         # recursive call with page: pagination.page+1 in params
@@ -280,8 +304,8 @@ class MIPSClient(gw.HTTPClient):
     
     @needs_auth
     def patch_backlight_and_validate_bulk(
-        self, devices: Sequence[int],
-        switch_staus: int, th_cap: Optional[int] = None
+        self, devices: List[int],
+        switch_status: int, th_cap: Optional[int] = None
     ) -> list:
         """Calls patch_backlight_and_validate for a sequence of device ids
 
@@ -297,32 +321,32 @@ class MIPSClient(gw.HTTPClient):
             th_cap = DEFAULT_THREAD_COUNT
         result = []
         log.debug("starting bulk patching and validation for %s devices with %s threads", len(devices), th_cap)  # noqa: E501
-        with futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix=THREAD_PREFIX) as ex:  # noqa: E501
-            # futures as hashable, using them as keys
-            # because it's better for as_completed()
-            futures_to_devices = {
-                ex.submit(self.patch_backlight_and_validate, d, switch_staus): d
+        with futures.ThreadPoolExecutor(max_workers=th_cap, thread_name_prefix=THREAD_PREFIX) as ex:  # noqa: E501
+            tasks = [
+                MIPSTask(self.patch_backlight_and_validate, d, switch_status)
                 for d in devices
-            }
-            # passing futures_to_devices makes as_completed iterate over keys
-            # key are concurrent's futures so this is exactly what we need
-            for f in futures.as_completed(futures_to_devices):
-                device = futures_to_devices[f]
+            ]
+            fs = {ex.submit(task): device for task, device in zip(tasks, devices)}  # noqa: E501
+            group_timeout = self.timeout * len(fs)
+            done, timed_out = futures.wait(fs, timeout=group_timeout,
+                                           return_when=futures.ALL_COMPLETED)
+            log.debug("%s out of %s devices bulk patched and validated",
+                      len(done), len(done)+len(timed_out))
+           
+            for fut in done:
+                device = fs[fut]
                 try:
-                    patch_err = f.result()
+                    patch_err = fut.result()
                 except Exception as e:
                     log.debug("patch and validate failed for %s: %s", device, e)
-                    result.append({device: e})
+                    result.append({"device": device, "error": e})
                 else:
-                    result.append({device: patch_err})
+                    result.append({"device": device, "error": patch_err})
+            
+            for fut in timed_out:
+                device = fs[fut]
+                result.append({"device": device, "error": f"group timeout ({group_timeout}) breached"})  # noqa: E501
+                log.debug("patching %s timed out due to group timeout setting", device)  # noqa: E501
+                fut.cancel()
+
         return result
-
-    # get device task list (paginated)
-        # TODO decide if implementation is needed after testing with EE OPS
-        
-        
-    
-
-
-        
-
