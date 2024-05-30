@@ -25,6 +25,7 @@ SHEET_SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 SUPPORTED_POLARS_TYPES = {"Int64", "Float64", "Utf8"}
+# Request types
 R_REQUEST = 1
 W_REQUEST = 2
 
@@ -41,6 +42,17 @@ class GoogleSheetRetriableError(Exception):
 
 class GoogleSheetMapper:
     "Encapsulates mapper methods that are used by GoogleSheetsGateway."
+
+    @staticmethod
+    def num_to_sheet_range(num: int) -> str:
+        """
+        Mapper converting col number to a spreadsheet column
+        """
+        rem, layers = num % 26, num // 26
+        first = ""
+        if layers > 0:
+            first = chr(65+layers-1)
+        return f"{first}{chr(65+rem-1)}"
 
     @staticmethod
     def _sheet_values_to_header_and_rows(sheet_values: list, header_rownum: int,
@@ -263,6 +275,25 @@ class GoogleSheetMapper:
             tab["properties"]["title"]: tab["properties"]
             for tab in sheet_properties["sheets"]
         }
+    
+    @staticmethod
+    def _sheet_update_and_range_to_value_range(sheet_range: str,
+                                               data_update: list) -> dict:
+        """
+        Mapper converting sheet data and data update
+        to a value range JSON body
+        """
+        return {
+            "range": sheet_range,
+            "majorDimension": "ROWS",
+            "values": data_update
+        }
+    
+    def _df_to_update_range(self, data: pl.DataFrame, start_row: int):
+        """
+        Creates update range in AA:ZZ notation based on data & start row
+        """
+        return f"A{start_row}:{self.num_to_sheet_range(len(data.columns))}"
 
 
 class GoogleSheetsGateway(GoogleSheetMapper):
@@ -516,16 +547,18 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         _, e = self.batch_update(sheet_id=sheet_id, requests=[req_body])
         if e is not None:
             log.error("deletion failed due to batch update error: %s", e)
-                
-    def append_data_native(self, sheet_id: str, tab_name: str,
-                           data: pl.DataFrame, row_limit: int,
-                           include_header: Optional[bool] = None) -> Exception:
+            return e
+    
+    def append_data(self, sheet_id: str, tab_name: str,
+                    data: pl.DataFrame, row_limit: int,
+                    include_header: Optional[bool] = None) -> Exception:
         """
         Uses native append Method of the Gsheet API to add new rows to the sheet.
         """
         # TODO migrate to batch update?
         if include_header is None:
             include_header = False
+        # read current data
         curr_data, e = self.read_sheet(sheet_id=sheet_id,
                                        tab_name=tab_name, as_df=True)
         if e is not None:
@@ -536,11 +569,35 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             row_limit=row_limit
         )
         log.debug("%s rows to delete", to_delete)
+        batch_ops = [] # container for batch updates
+        # delete if needed
         if to_delete > 0:
-            _, e = self.delete_rows(sheet_id=sheet_id, tab_name=tab_name,
-                                    end=to_delete+1)
-        update = self._df_to_rows_update(data=data, include_header=include_header)  # noqa: E501
-        # TODO finish implementing and test
+            sheet_props, e = self.get_sheet_properties(
+                sheet_id=sheet_id, return_raw=False
+            )
+            try:
+                tab_id = sheet_props[tab_name]["sheetId"]
+            except KeyError as e:
+                log.error("deletion failed bc %s tab is not in sheet %s",
+                          tab_name, sheet_id)
+                return e
+            req_body = self._delete_rows_params_to_body(
+                tab_id=tab_id, start=1, end=to_delete+1
+            )
+            batch_ops.append(req_body)
+        batch_ops.append(
+            self._append_cell_params_to_body(
+                rows=self._df_to_rows_update(
+                    data=data,
+                    include_header=include_header
+                ),
+                tab_id=tab_id
+            )
+        )
+        _, e = self.batch_update(sheet_id=sheet_id, requests=batch_ops)
+        if e is not None:
+            log.error("append failed due to batch update error: %s", e)
+            return e
 
         
 
