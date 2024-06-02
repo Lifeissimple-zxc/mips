@@ -9,7 +9,7 @@ from typing import Callable
 import polars as pl
 
 from lib.gateway import google_sheets, mips
-from lib.internal import configurator
+from lib.internal import configurator, utils
 
 log = logging.getLogger("main_logger")
 
@@ -46,8 +46,7 @@ class WorkflowTask:
 
 
 class App:
-    "Abstraction that uses lower level objects to execute MIPS tasks"
-    _ts_format = "%Y-%m-%d %H:%M:%S"    
+    "Abstraction that uses lower level objects to execute MIPS tasks"  
     def __init__(
             self,
             sheets: google_sheets.GoogleSheetsGateway,
@@ -64,10 +63,6 @@ class App:
         self.mips_api_client = mips_api_client
         # TODO change it to a config object?
         self.cfg = cfg
-
-    @classmethod
-    def _get_current_timestamp(cls):
-        return datetime.now(tz=timezone.utc).strftime(format=cls._ts_format)
 
     def _task_name_to_executable(self, name: str):
         if name == PATCH_BACKLIGHT_WORKFLOW_NAME:
@@ -123,6 +118,9 @@ class App:
                 str.contains(ALL_HOURS) 
             )
         )
+        if len(task_data) == 0:
+            log.info("no enabled tasks, nothing to do")
+            return
         
         log.info("%s tasks to execute after filtering", len(task_data))
         with futures.ThreadPoolExecutor(max_workers=len(task_data)) as ex:
@@ -146,7 +144,8 @@ class App:
             sheet_id=self.cfg.sheets.spreadsheet,
             tab_name=self.cfg.sheets.tabs["execute_logs"]["name"],
             data=pl.DataFrame(data=results),
-            row_limit=self.cfg.sheets.tabs["execute_logs"]["row_limit"]
+            row_limit=self.cfg.sheets.tabs["execute_logs"]["row_limit"],
+            schema=self.cfg.sheets.tabs["execute_logs"]["schema"]
         )
         if e is not None:
             return WorkflowError(f"execute_tasks failed to append task logs to sheet: {e}")  # noqa: E501
@@ -167,16 +166,16 @@ class App:
         """  # noqa: E501
         result = {
             "workflow": PATCH_BACKLIGHT_WORKFLOW_NAME,
-            "start_ts": self._get_current_timestamp()
+            "start_ts": utils.get_current_timestamp()
         }
         devices, e = self.mips_api_client.get_devices()
         if e is not None:
             result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")
-            result["end_ts"] = self._get_current_timestamp()
+            result["end_ts"] = utils.get_current_timestamp()
             return result
-        # TODO implement shadow mode arg
+        devices = {int(device["id"]) for device in devices}
         results = self.mips_api_client.patch_backlight_and_validate_bulk(
-            devices=devices,
+            devices=list(devices),
             switch_status=switch_status,
             shadow_mode=(mode == SHADOW_MODE_NAME)
         )
@@ -185,14 +184,14 @@ class App:
             sheet_id=self.cfg.sheets.spreadsheet,
             tab_name=self.cfg.sheets.tabs["patch_backlight_logs"]["name"],
             data=pl.DataFrame(data=results),
-            row_limit=self.cfg.sheets.tabs["patch_backlight_logs"]["row_limit"]
+            row_limit=self.cfg.sheets.tabs["patch_backlight_logs"]["row_limit"],
+            schema=self.cfg.sheets.tabs["patch_backlight_logs"]["schema"]
         )
+        result["end_ts"] = utils.get_current_timestamp()
         if e is not None:
             result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")  # noqa: E501
-            result["end_ts"] = self._get_current_timestamp()
             return result
         # TODO message to telegram?
-        result["end_ts"] = self._get_current_timestamp()
         return result
         
 

@@ -48,24 +48,27 @@ google_sheets:
           sheet_name: "end_ts"
           type: "Utf8"
         error:
-          sheet_name: "end_ts"
+          sheet_name: "error"
           type: "Utf8"
           
     patch_backlight_logs:
       name: "patch_backlight_logs"
       row_limit: 20000
       schema:
-        workflow:
-            sheet_name: "device"
-            type: "Utf8"
+        device:
+          sheet_name: "device"
+          type: "Utf8"
         start_ts:
           sheet_name: "start_ts"
           type: "Utf8"
         end_ts:
           sheet_name: "end_ts"
           type: "Utf8"
+        switch_status:
+          sheet_name: "switch_status"
+          type: "Int32"
         error:
-          sheet_name: "end_ts"
+          sheet_name: "error"
           type: "Utf8"
   token: "secrets/sheets.json"
   read_rps: 1

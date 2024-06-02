@@ -9,12 +9,11 @@ from typing import Callable, List, Optional
 import requests
 
 from lib.gateway.base import gw
+from lib.internal import utils
 
 log = logging.getLogger("main_logger")
 
 # TODO telegram logging
-# TODO configuration
-# TODO implement higher level class for the app's logic
 # TODO tests
 
 
@@ -309,23 +308,34 @@ class MIPSClient(gw.HTTPClient):
         if shadow_mode is None:
             shadow_mode = True
         
+        # TODO make it an object?
+        result = {
+            "device": device_id,
+            "switch_status": switch_status,
+            "start_ts": utils.get_current_timestamp(),
+            "error": None
+        }
+        if shadow_mode:
+            log.info("no status check for device %s because of shadow mode",
+                     device_id)
+            return result
         patch_err = self.patch_backlight(device_id=device_id,
                                          switch_status=switch_status,
                                          shadow_mode=shadow_mode)
         if patch_err is not None:
-            return patch_err
+            result["error"] = patch_err
+            return result
         bl_status, e = self.get_backlight_settings(device_id=device_id)
         if e is not None:
-            return e
+            result["error"] = e
+            return result
         
-        if shadow_mode:
-            log.info("no status check for device %s because of shadow mode",
-                     device_id)
-            return
+        
         if bl_status != switch_status:
-            return ValueError(
+            result["error"] = ValueError(
                 f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
             )
+            return result
     
     @needs_auth
     def patch_backlight_and_validate_bulk(
@@ -365,19 +375,32 @@ class MIPSClient(gw.HTTPClient):
             log.debug("%s out of %s devices bulk patched and validated",
                       len(done), len(done)+len(timed_out))
            
+            ts = utils.get_current_timestamp()
             for fut in done:
+                # TODO update logging of results
                 device = fs[fut]
                 try:
-                    patch_err = fut.result()
+                    res = fut.result()
                 except Exception as e:
                     log.debug("patch and validate failed for %s: %s", device, e)
-                    result.append({"device": device, "error": e})
+                    result.append({
+                        "device": device, 
+                        "error": e,
+                        "start_ts": ts,
+                        "end_ts": ts
+                    })
                 else:
-                    result.append({"device": device, "error": patch_err})
+                    res["end_ts"] = ts
+                    result.append(res)
             
             for fut in timed_out:
                 device = fs[fut]
-                result.append({"device": device, "error": f"group timeout ({group_timeout}) breached"})  # noqa: E501
+                result.append({
+                    "device": device, 
+                    "error": f"group timeout ({group_timeout}) breached",
+                    "start_ts": ts,
+                    "end_ts": ts
+                })
                 log.debug("patching %s timed out due to group timeout setting", device)  # noqa: E501
                 fut.cancel()
 

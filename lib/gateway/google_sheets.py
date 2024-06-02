@@ -175,7 +175,7 @@ class GoogleSheetMapper:
         Returns:
             tuple(typed polars df, err if any)
         """
-        log.debug("Preparing pl aliases")
+        log.debug("typecsting with schema %s", schema)
         try:
             pl_aliases = self._sheet_schema_to_pl_aliases(schema=schema)
         except Exception as e:
@@ -450,8 +450,6 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             log.error("read_sheet error for sheet %s: %s", sheet_id, e)
             return None, e
         sheet_values = resp["values"]
-        log.info("read_sheet ok for sheet: %s", sheet_values)
-
         header, rows = self._sheet_values_to_header_and_rows(
             sheet_values=sheet_values,
             header_rownum=header_rownum,
@@ -468,7 +466,8 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         if not schema:
             log.info("use_schema is False, returning untyped")
             return df, None
-
+        # TODO reading patch_backlight_logs fails, figure out why
+        print('df sheet', df.head())
         return self.typecast_df(df=df, schema=schema)
     
     def batch_update(self, sheet_id: str, requests: List[dict]) -> tuple:
@@ -545,6 +544,7 @@ class GoogleSheetsGateway(GoogleSheetMapper):
     
     def append_data(self, sheet_id: str, tab_name: str,
                     data: pl.DataFrame, row_limit: int,
+                    schema: Optional[dict] = None,
                     include_header: Optional[bool] = None) -> Exception:
         """Appends data to a sheeet
 
@@ -560,12 +560,17 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         """  # noqa: E501
         if include_header is None:
             include_header = False
-        # read current data
-        curr_data, e = self.read_sheet(sheet_id=sheet_id,
-                                       tab_name=tab_name, as_df=True)
+        
+        curr_data, e = self.read_sheet(
+            sheet_id=sheet_id,
+            tab_name=tab_name,
+            schema=schema,
+            as_df=True
+        )
         if e is not None:
             log.error("append failed bc reading sheet failed: %s", e)
             return e
+        print("curr_data", curr_data.columns)
         to_delete = self._compute_number_of_rows_to_drop(
             current_len=len(curr_data), new_len=len(data),
             row_limit=row_limit
@@ -574,7 +579,15 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         sheet_props, e = self.get_sheet_properties(
             sheet_id=sheet_id, return_raw=False
         )
-        tab_id = None
+        # preserve order of columns
+        print("data to be pasted (unordered)", data.head())
+        if schema is not None:
+            data, e = self.typecast_df(df=data, schema=schema)
+            if e is not None:
+                log.error("append failed due to data typecasting error: %s", e)
+                return e
+            data = data.select(curr_data.columns)
+            print("data to be pasted", data.head())
         try:
             tab_id = sheet_props[tab_name]["sheetId"]
         except KeyError as e:
