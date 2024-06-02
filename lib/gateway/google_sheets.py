@@ -63,8 +63,6 @@ class GoogleSheetMapper:
         """
         header_index = header_rownum-1
         header = sheet_values[header_index]
-        log.debug("header row fetched: %s. Index used: %s",
-                  header, header_index)
         # Drop rows we want to skip based on params
         del sheet_values[header_index:header_index+1+header_offset]
         return header, sheet_values
@@ -164,7 +162,6 @@ class GoogleSheetMapper:
             except Exception as e:
                 log.error("Error parsing %s column: %s", col, e)
                 return None, e
-            log.debug("Df after parsing %s column: %s", col, df)
         return df, None
 
     def typecast_df(self, df: pl.DataFrame, schema: dict) -> tuple:
@@ -185,7 +182,6 @@ class GoogleSheetMapper:
             log.error("Error parsing schema to aliases: %s", e)
             return None, e
         df = df.select(pl_aliases)
-        log.debug("Aliased columns to internal names: %s", df)
         log.debug("Parsing columns")
         return self.parse_cols(df=df, schema=schema)
 
@@ -195,8 +191,7 @@ class GoogleSheetMapper:
         """
         Mapper converting tab name to tab id
         """
-        log.debug("Looking tab id for %s in %s",
-                          tab_name, tab_properties)
+        log.debug("Looking tab id for %s in %s", tab_name, tab_properties)
 
         if (tab_data := tab_properties.get(tab_name, None)) is None:
             e = KeyError(f"{tab_name} is not present in: {tab_data}")
@@ -366,8 +361,7 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             with rps_limiter:
                 with timer.TimerContext() as t:
                     res = req.execute()
-            log.info("Method %s responded in %s seconds",
-                             req.methodId, t.elapsed)
+            log.info("Method %s responded in %s seconds", req.methodId, t.elapsed)
             return res
         except google_errors.HttpError as e:
             if  500 <= e.resp.status < 600:
@@ -552,10 +546,18 @@ class GoogleSheetsGateway(GoogleSheetMapper):
     def append_data(self, sheet_id: str, tab_name: str,
                     data: pl.DataFrame, row_limit: int,
                     include_header: Optional[bool] = None) -> Exception:
-        """
-        Uses native append Method of the Gsheet API to add new rows to the sheet.
-        """
-        # TODO migrate to batch update?
+        """Appends data to a sheeet
+
+        Args:
+            sheet_id (str): sheet identifier
+            tab_name (str): tab name where to append
+            data (pl.DataFrame): data to append
+            row_limit (int): prevents sheets from growing indefinitely
+            include_header (Optional[bool], optional): True includes data header in the append operation.
+
+        Returns:
+            Exception: error if any
+        """  # noqa: E501
         if include_header is None:
             include_header = False
         # read current data
@@ -569,22 +571,24 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             row_limit=row_limit
         )
         log.debug("%s rows to delete", to_delete)
+        sheet_props, e = self.get_sheet_properties(
+            sheet_id=sheet_id, return_raw=False
+        )
+        tab_id = None
+        try:
+            tab_id = sheet_props[tab_name]["sheetId"]
+        except KeyError as e:
+            log.error("deletion failed bc %s tab is not in sheet %s",
+                      tab_name, sheet_id)
+            return e
         batch_ops = [] # container for batch updates
         # delete if needed
         if to_delete > 0:
-            sheet_props, e = self.get_sheet_properties(
-                sheet_id=sheet_id, return_raw=False
+            batch_ops.append(
+                self._delete_rows_params_to_body(
+                    tab_id=tab_id, start=1, end=to_delete+1
+                )
             )
-            try:
-                tab_id = sheet_props[tab_name]["sheetId"]
-            except KeyError as e:
-                log.error("deletion failed bc %s tab is not in sheet %s",
-                          tab_name, sheet_id)
-                return e
-            req_body = self._delete_rows_params_to_body(
-                tab_id=tab_id, start=1, end=to_delete+1
-            )
-            batch_ops.append(req_body)
         batch_ops.append(
             self._append_cell_params_to_body(
                 rows=self._df_to_rows_update(

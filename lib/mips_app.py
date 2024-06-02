@@ -9,6 +9,7 @@ from typing import Callable
 import polars as pl
 
 from lib.gateway import google_sheets, mips
+from lib.internal import configurator
 
 log = logging.getLogger("main_logger")
 
@@ -25,6 +26,7 @@ TOGGLE_COL = "toggle"
 HOURS_TO_RUN_COL = "hours_to_run"
 WORKFLOW_COL = "workflow"
 ARGS_COL = "arguments"
+MODE_COL = "mode"
 # other constants
 SHADOW_MODE_NAME = "shadow"
 TOGGLE_ON = "on"
@@ -50,7 +52,7 @@ class App:
             self,
             sheets: google_sheets.GoogleSheetsGateway,
             mips_api_client: mips.MIPSClient,
-            cfg: dict
+            cfg: configurator.Configurator
         ):
         """Constructs the application.
 
@@ -77,13 +79,11 @@ class App:
         if task[WORKFLOW_COL] == PATCH_BACKLIGHT_WORKFLOW_NAME:
             if cnt_args > 1:
                 raise ValueError("wrong number of args")
-            return [_PATCH_BACKLIGHT_PARAM_NAMES[args[0]]]
+            return [task[MODE_COL], _PATCH_BACKLIGHT_PARAM_NAMES[args[0]]]
     
     def _task_data_to_workflow_task(self, task: dict) -> tuple:
-        # get executable
         if (executable := self._task_name_to_executable(task[WORKFLOW_COL])) is None:  # noqa: E501
             return None, NotImplementedError(f"{task[WORKFLOW_COL]} is not supported")
-        # get args
         try:
             return WorkflowTask(
                 executable=executable,
@@ -103,17 +103,17 @@ class App:
             error if any
         """
         task_data, e = self.sheets.read_sheet(
-            sheet_id=self.cfg["sheets"]["spreadsheet"],
-            tab_name=self.cfg["sheets"]["tabs"]["control_panel"]["name"],
+            sheet_id=self.cfg.sheets.spreadsheet,
+            tab_name=self.cfg.sheets.tabs["control_panel"]["name"],
             as_df=True,
-            schema=self.cfg["sheets"]["tabs"]["control_panel"]["schema"]
+            schema=self.cfg.sheets.tabs["control_panel"]["schema"]
         )
         if e is not None:
             return WorkflowError(f"execute_tasks failed to fetch tasks from sheet: {e}")  # noqa: E501
         log.info("fetched %s tasks from sheet", len(task_data))
         task_data = task_data.filter(
             # toggle is on
-            pl.col(TOGGLE_COL)==TOGGLE_ON
+            (pl.col(TOGGLE_COL)==TOGGLE_ON)
             & (
                 # either hour matches
                 pl.col(HOURS_TO_RUN_COL).str.to_lowercase()
@@ -123,6 +123,7 @@ class App:
                 str.contains(ALL_HOURS) 
             )
         )
+        
         log.info("%s tasks to execute after filtering", len(task_data))
         with futures.ThreadPoolExecutor(max_workers=len(task_data)) as ex:
             workflows = []
@@ -137,14 +138,15 @@ class App:
                     wf_task.executable, *wf_task.args
                 ))
             # exceptions are handled downstream so no try / except here
-            results = [fut.result for fut in futures.as_completed(workflows)]
+            results = [fut.result() for fut in futures.as_completed(workflows)]
         log.info("%s tasks executed. result count: %s",
                  len(workflows), len(results))
+        #TODO order columns
         e = self.sheets.append_data(
-            sheet_id=self.cfg["sheets"]["spreadsheet"],
-            tab_name=self.cfg["sheets"]["tabs"]["execute_logs"]["name"],
+            sheet_id=self.cfg.sheets.spreadsheet,
+            tab_name=self.cfg.sheets.tabs["execute_logs"]["name"],
             data=pl.DataFrame(data=results),
-            row_limit=self.cfg["sheets"]["tabs"]["execute_logs"]["row_limit"]
+            row_limit=self.cfg.sheets.tabs["execute_logs"]["row_limit"]
         )
         if e is not None:
             return WorkflowError(f"execute_tasks failed to append task logs to sheet: {e}")  # noqa: E501
@@ -178,11 +180,12 @@ class App:
             switch_status=switch_status,
             shadow_mode=(mode == SHADOW_MODE_NAME)
         )
+        #TODO order columns
         e = self.sheets.append_data(
-            sheet_id=self.cfg["sheets"]["spreadsheet"],
-            tab_name=self.cfg["sheets"]["tabs"]["patch_backlight_logs"]["name"],
+            sheet_id=self.cfg.sheets.spreadsheet,
+            tab_name=self.cfg.sheets.tabs["patch_backlight_logs"]["name"],
             data=pl.DataFrame(data=results),
-            row_limit=self.cfg["sheets"]["tabs"]["patch_backlight_logs"]["row_limit"]
+            row_limit=self.cfg.sheets.tabs["patch_backlight_logs"]["row_limit"]
         )
         if e is not None:
             result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")  # noqa: E501

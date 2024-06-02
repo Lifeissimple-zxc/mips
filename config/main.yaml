@@ -1,9 +1,0 @@
-mips:
-  rps:
-    method:
-      get:
-        rps: 10
-      put:
-        rps: 5
-      post: 5
-        rps: 5
