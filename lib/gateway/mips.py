@@ -12,11 +12,9 @@ from lib.gateway.base import gw
 
 log = logging.getLogger("main_logger")
 
-# TODO implement retries and RPS throttling
-# TODO implement retry logic for InvalidAUTHError
-# TODO gsheet
 # TODO telegram logging
 # TODO configuration
+# TODO implement higher level class for the app's logic
 # TODO tests
 
 
@@ -43,21 +41,7 @@ class InvalidAUTHError(Exception):
     "Raised when response indicates that auth is invalid"
     pass
 
-# mappers
-def response_to_exception(r: requests.Response) -> Exception:
-    "Converts status code of a response to an exception"
-    if r.status_code == 200:
-        if re.search(pattern=JS_NEEDED_SUBSTRING, string=r.text): 
-            return InvalidAUTHError(f"auth is invalid. response text: {r.text}")
-        return
-    msg = f"status code: {r.status_code}. details: {r.text}"
-    if 400 <= r.status_code < 500:
-        return gw.ClientError(msg)
-    elif 500 <= r.status_code < 600:
-        return gw.ServerError(msg)
-    else:
-        return gw.UnexpectedStatusCodeError(msg)
-    
+# mappers    
 def _bool_flag_to_int_param(flag: bool) -> int:
     "Converts python bool to int that the API understands"
     if flag:
@@ -148,7 +132,8 @@ class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
     def __init__(self, user: str, password: str, timeout: int,
-                 auto_auth: Optional[bool] = None):
+                 auto_auth: Optional[bool] = None,
+                 shadow_mode: Optional[bool] = None):
         """Instantiates MIPS client
 
         Args:
@@ -159,10 +144,14 @@ class MIPSClient(gw.HTTPClient):
 
         Raises:
             e: _description_
-        """  # noqa: E501
-                
+        """  # noqa: E501        
         if auto_auth is None:
             auto_auth = True
+        if shadow_mode is None:
+            shadow_mode = True
+        self.shadow_mode = shadow_mode
+        if self.shadow_mode:
+            log.info("client runs in shadow mode, write requests will not be executed")  # noqa: E501
         # saving auth data within self to re-auth when needed
         self.auth_request_body = {
             "login_id": user,
@@ -191,11 +180,26 @@ class MIPSClient(gw.HTTPClient):
             data=self.auth_request_body
         )
     
+    @staticmethod
+    def response_to_exception(r: requests.Response) -> Exception:
+        "Converts status code of a response to an exception"
+        if r.status_code == 200:
+            if re.search(pattern=JS_NEEDED_SUBSTRING, string=r.text): 
+                return InvalidAUTHError(f"auth is invalid. response text: {r.text}")
+            return
+        msg = f"status code: {r.status_code}. details: {r.text}"
+        if 400 <= r.status_code < 500:
+            return gw.ClientError(msg)
+        elif 500 <= r.status_code < 600:
+            return gw.ServerError(msg)
+        else:
+            return gw.UnexpectedStatusCodeError(msg)
+    
     def auth(self) -> Exception:
         "Performs client authentication"
         # TODO implement retries for server errors
         r = self.make_request(self._prepare_auth_req())
-        if (e := response_to_exception(r=r)) is not None:
+        if (e := self.response_to_exception(r=r)) is not None:
             return e
         # getting here means we are ok
         self.__ok_auth = True
@@ -217,12 +221,15 @@ class MIPSClient(gw.HTTPClient):
         "Sends a GET request to /devices-mips recursively until all the pages are processed."  # noqa: E501
         if results is None:
             results = []
-        r = self.make_request(
-            req=_get_devices_param_to_request(
-                is_online=is_online, page=page
+        try:
+            r = self.make_request(
+                req=_get_devices_param_to_request(
+                    is_online=is_online, page=page
+                )
             )
-        )
-        if (e := response_to_exception(r)) is not None:
+        except Exception as e:
+            return None, e
+        if (e := self.response_to_exception(r)) is not None:
             return None, e
         resp_body = r.json()
         pagination = resp_body["pagination"]
@@ -239,6 +246,10 @@ class MIPSClient(gw.HTTPClient):
     @needs_auth
     def patch_backlight(self, device_id: int, switch_status: int) -> Exception:
         "Patches backlight settings of a single device"
+        if self.shadow_mode:
+            log.info("device id %s is not patched because of shadow mode",
+                     device_id)
+            return
         try:
             req = _patch_backlight_params_to_request(
                 device_id=device_id, switch_status=switch_status
@@ -246,8 +257,10 @@ class MIPSClient(gw.HTTPClient):
         except Exception as e:
             log.error("request prep failed: %s", e, exc_info=True)
             return  e
-        r = self.make_request(req=req)
-        return response_to_exception(r=r)
+        try:
+            return self.response_to_exception(r=self.make_request(req=req))
+        except Exception as e:
+            return e
         
     @needs_auth
     def get_backlight_settings(self, device_id: int,
@@ -255,10 +268,13 @@ class MIPSClient(gw.HTTPClient):
         "Fetches backlight settings from MIPS backend"
         if only_status is None:
             only_status = True
-        r = self.make_request(
-            req=_get_backlight_settings_params_to_request(device_id=device_id)
-        )
-        if (e := response_to_exception(r=r)) is not None:
+        try:
+            r = self.make_request(
+                req=_get_backlight_settings_params_to_request(device_id=device_id)
+            )
+        except Exception as e:
+            return None, e
+        if (e := self.response_to_exception(r=r)) is not None:
             return None, e
         
         body = r.json()
@@ -272,10 +288,13 @@ class MIPSClient(gw.HTTPClient):
     @needs_auth
     def get_device_task_list(self, device_id: int) -> tuple:
         "Fetches most recent tasks associated with a device id"
-        r = self.make_request(
-            req=_get_device_task_list_params_to_request(device_id=device_id)
-        )
-        if (e := response_to_exception(r=r)) is not None:
+        try:
+            r = self.make_request(
+                req=_get_device_task_list_params_to_request(device_id=device_id)
+            )
+        except Exception as e:
+            return None, e
+        if (e := self.response_to_exception(r=r)) is not None:
             return None, e
         return r.json(), None
     
@@ -297,6 +316,11 @@ class MIPSClient(gw.HTTPClient):
         bl_status, e = self.get_backlight_settings(device_id=device_id)
         if e is not None:
             return e
+        
+        if self.shadow_mode:
+            log.info("no status check for device %s because of shadow mode",
+                     device_id)
+            return
         if bl_status != switch_status:
             return ValueError(
                 f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
