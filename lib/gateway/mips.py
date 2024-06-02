@@ -116,11 +116,7 @@ class MIPSTask:
     def __call__(self):
         "Makes instance of this class a function"
         if self.cancelled:
-            log.debug("task %s with args %s kwargs %s was cancelled",
-                      self.fn.__class__, self.args, self.kwargs)
             return
-        log.debug("executing task %s with args %s kwargs %s",
-                  self.fn.__class__, self.args, self.kwargs)
         return self.fn(*self.args, **self.kwargs)
     
     def cancel(self):
@@ -132,8 +128,7 @@ class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
     def __init__(self, user: str, password: str, timeout: int,
-                 auto_auth: Optional[bool] = None,
-                 shadow_mode: Optional[bool] = None):
+                 auto_auth: Optional[bool] = None):
         """Instantiates MIPS client
 
         Args:
@@ -147,11 +142,6 @@ class MIPSClient(gw.HTTPClient):
         """  # noqa: E501        
         if auto_auth is None:
             auto_auth = True
-        if shadow_mode is None:
-            shadow_mode = True
-        self.shadow_mode = shadow_mode
-        if self.shadow_mode:
-            log.info("client runs in shadow mode, write requests will not be executed")  # noqa: E501
         # saving auth data within self to re-auth when needed
         self.auth_request_body = {
             "login_id": user,
@@ -244,9 +234,14 @@ class MIPSClient(gw.HTTPClient):
         )
     
     @needs_auth
-    def patch_backlight(self, device_id: int, switch_status: int) -> Exception:
+    def patch_backlight(self, device_id: int,
+                        switch_status: int,
+                        shadow_mode: Optional[bool] = None) -> Exception:
         "Patches backlight settings of a single device"
-        if self.shadow_mode:
+        if shadow_mode is None:
+            shadow_mode = True
+        
+        if shadow_mode:
             log.info("device id %s is not patched because of shadow mode",
                      device_id)
             return
@@ -299,7 +294,9 @@ class MIPSClient(gw.HTTPClient):
         return r.json(), None
     
     @needs_auth
-    def patch_backlight_and_validate(self, device_id: int, switch_status: int) -> Exception:  # noqa: E501
+    def patch_backlight_and_validate(self, device_id: int,
+                                     switch_status: int,
+                                     shadow_mode: Optional[bool] = None) -> Exception:  # noqa: E501
         """Calls patch_backlight and get_backlight_settings to patch backlight and double check the change. 
 
         Args:
@@ -309,15 +306,19 @@ class MIPSClient(gw.HTTPClient):
         Returns:
             Exception: error if any
         """  # noqa: E501
+        if shadow_mode is None:
+            shadow_mode = True
+        
         patch_err = self.patch_backlight(device_id=device_id,
-                                         switch_status=switch_status)
+                                         switch_status=switch_status,
+                                         shadow_mode=shadow_mode)
         if patch_err is not None:
             return patch_err
         bl_status, e = self.get_backlight_settings(device_id=device_id)
         if e is not None:
             return e
         
-        if self.shadow_mode:
+        if shadow_mode:
             log.info("no status check for device %s because of shadow mode",
                      device_id)
             return
@@ -329,7 +330,9 @@ class MIPSClient(gw.HTTPClient):
     @needs_auth
     def patch_backlight_and_validate_bulk(
         self, devices: List[int],
-        switch_status: int, th_cap: Optional[int] = None
+        switch_status: int,
+        th_cap: Optional[int] = None,
+        shadow_mode: Optional[bool] = None
     ) -> list:
         """Calls patch_backlight_and_validate for a sequence of device ids
 
@@ -343,12 +346,17 @@ class MIPSClient(gw.HTTPClient):
         """  # noqa: E501
         if th_cap is None:
             th_cap = DEFAULT_THREAD_COUNT
+        if shadow_mode is None:
+            shadow_mode = True
+
         result = []
         log.debug("starting bulk patching and validation for %s devices with %s threads", len(devices), th_cap)  # noqa: E501
         with futures.ThreadPoolExecutor(max_workers=th_cap, thread_name_prefix=THREAD_PREFIX) as ex:  # noqa: E501
             tasks = [
-                MIPSTask(self.patch_backlight_and_validate, d, switch_status)
-                for d in devices
+                MIPSTask(
+                    self.patch_backlight_and_validate,
+                    d, switch_status, shadow_mode
+                ) for d in devices
             ]
             fs = {ex.submit(task): device for task, device in zip(tasks, devices)}  # noqa: E501
             group_timeout = self.timeout * len(fs)
