@@ -1,0 +1,73 @@
+mips:
+  rps_config:
+    method:
+      get:
+        rps: 10
+      put:
+        rps: 5
+      post:
+        rps: 5
+  rps_config_parsing_mode: 0 # method
+  timeout: 10
+
+secrets_yaml: "secrets/secrets.yaml"
+
+google_sheets:
+  spreadsheet: "1AICxqzT_Cy-qoswGLhwsu5dSqJal26fxM4MeodBoHjI"
+  tabs:
+    control_panel:
+      name: "control_panel"
+      schema:
+        workflow:
+          sheet_name: "workflow"
+          type: "Utf8"
+        hours_to_run:
+          sheet_name: "hours_to_run"
+          type: "Utf8"
+        toggle:
+          sheet_name: "toggle"
+          type: "Utf8"
+        mode:
+          sheet_name: "mode"
+          type: "Utf8"
+        arguments:
+          sheet_name: "arguments"
+          type: "Utf8"
+        
+    execute_logs:
+      name: "execute_logs"
+      row_limit: 20000
+      schema:
+        workflow:
+          sheet_name: "workflow"
+          type: "Utf8"
+        start_ts:
+          sheet_name: "start_ts"
+          type: "Utf8"
+        end_ts:
+          sheet_name: "end_ts"
+          type: "Utf8"
+        error:
+          sheet_name: "end_ts"
+          type: "Utf8"
+          
+    patch_backlight_logs:
+      name: "patch_backlight_logs"
+      row_limit: 20000
+      schema:
+        workflow:
+            sheet_name: "device"
+            type: "Utf8"
+        start_ts:
+          sheet_name: "start_ts"
+          type: "Utf8"
+        end_ts:
+          sheet_name: "end_ts"
+          type: "Utf8"
+        error:
+          sheet_name: "end_ts"
+          type: "Utf8"
+  token: "secrets/sheets.json"
+  read_rps: 1
+  write_rps: 1
+  request_timeout: 30
