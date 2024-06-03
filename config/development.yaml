@@ -50,6 +50,9 @@ google_sheets:
         error:
           sheet_name: "error"
           type: "Utf8"
+        mode:
+          sheet_name: "mode"
+          type: "Utf8"
           
     patch_backlight_logs:
       name: "patch_backlight_logs"
@@ -57,7 +60,7 @@ google_sheets:
       schema:
         device:
           sheet_name: "device"
-          type: "Utf8"
+          type: "Int32"
         start_ts:
           sheet_name: "start_ts"
           type: "Utf8"
@@ -69,6 +72,9 @@ google_sheets:
           type: "Int32"
         error:
           sheet_name: "error"
+          type: "Utf8"
+        mode:
+          sheet_name: "mode"
           type: "Utf8"
   token: "secrets/sheets.json"
   read_rps: 1

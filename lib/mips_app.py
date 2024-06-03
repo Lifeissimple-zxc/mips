@@ -164,22 +164,26 @@ class App:
         Returns:
             dict describing results.
         """  # noqa: E501
+        log.info("executing patch_backlight workflow")
         result = {
             "workflow": PATCH_BACKLIGHT_WORKFLOW_NAME,
             "start_ts": utils.get_current_timestamp()
         }
         devices, e = self.mips_api_client.get_devices()
+        log.info("fetched %s devices", len(devices))
         if e is not None:
             result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")
             result["end_ts"] = utils.get_current_timestamp()
             return result
         devices = {int(device["id"]) for device in devices}
+        log.info("converted devices to a list of ids")
         results = self.mips_api_client.patch_backlight_and_validate_bulk(
             devices=list(devices),
             switch_status=switch_status,
             shadow_mode=(mode == SHADOW_MODE_NAME)
         )
-        #TODO order columns
+        log.info("bulk patched %s devices and got %s results",
+                 len(devices), len(results))
         e = self.sheets.append_data(
             sheet_id=self.cfg.sheets.spreadsheet,
             tab_name=self.cfg.sheets.tabs["patch_backlight_logs"]["name"],
@@ -193,7 +197,7 @@ class App:
             return result
         # TODO message to telegram?
         return result
-        
+        # TODO finish E2E testing
 
     
     

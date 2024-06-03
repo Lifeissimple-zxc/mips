@@ -24,7 +24,7 @@ SHEET_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-SUPPORTED_POLARS_TYPES = {"Int64", "Float64", "Utf8"}
+SUPPORTED_POLARS_TYPES = {"Int64", "Float64", "Utf8", "Int32"}
 # Request types
 R_REQUEST = 1
 W_REQUEST = 2
@@ -66,25 +66,6 @@ class GoogleSheetMapper:
         # Drop rows we want to skip based on params
         del sheet_values[header_index:header_index+1+header_offset]
         return header, sheet_values
-
-    @staticmethod
-    def _sheet_rows_and_header_to_df(rows: list, header: list):
-        """
-        Converts 2d list of sheet rows to a Polars df
-
-        Args:
-            data: 2d list with sheet rows from Google API
-            header: list with column names
-
-        Returns:
-            Polars df
-        """
-        log.debug("Converting sheet rows to df")
-        df = pl.DataFrame(data=rows)
-        if len(df) > 0:
-            df = df.transpose()
-            df.columns = header
-        return df
     
     @staticmethod
     def _sheet_schema_to_pl_aliases(schema: dict) -> list:
@@ -140,10 +121,10 @@ class GoogleSheetMapper:
         log.debug("Filled empty strings with nulls")
         if col_type == "Utf8":
             return df, None
-        elif col_type == "Int64":
+        elif "int" in col_type.lower():
             return df.with_columns(col_obj.cast(dtype=dtype)
                                    .alias(name=col)), None
-        elif col_type == "Float64":
+        elif "float" in col_type.lower():
             return df.with_columns(
                 col_obj.str.replace(pattern="%", value="", literal=True)
                 .cast(dtype=dtype)
@@ -160,7 +141,7 @@ class GoogleSheetMapper:
                     log.error("Error parsing %s column: %s", col, e)
                     return None, e
             except Exception as e:
-                log.error("Error parsing %s column: %s", col, e)
+                log.error("Unhandled error parsing %s column: %s", col, e)
                 return None, e
         return df, None
 
@@ -175,7 +156,7 @@ class GoogleSheetMapper:
         Returns:
             tuple(typed polars df, err if any)
         """
-        log.debug("typecsting with schema %s", schema)
+        log.debug("typecasting with schema %s", schema)
         try:
             pl_aliases = self._sheet_schema_to_pl_aliases(schema=schema)
         except Exception as e:
@@ -461,13 +442,12 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             return [header] + rows, None
 
         log.info("as_df is True, converting to polars")
-        df = self._sheet_rows_and_header_to_df(rows=rows, header=header)
+        df = pl.DataFrame(data=rows, schema=header, orient="row")
 
         if not schema:
             log.info("use_schema is False, returning untyped")
             return df, None
         # TODO reading patch_backlight_logs fails, figure out why
-        print('df sheet', df.head())
         return self.typecast_df(df=df, schema=schema)
     
     def batch_update(self, sheet_id: str, requests: List[dict]) -> tuple:
@@ -570,7 +550,6 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         if e is not None:
             log.error("append failed bc reading sheet failed: %s", e)
             return e
-        print("curr_data", curr_data.columns)
         to_delete = self._compute_number_of_rows_to_drop(
             current_len=len(curr_data), new_len=len(data),
             row_limit=row_limit
@@ -579,15 +558,11 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         sheet_props, e = self.get_sheet_properties(
             sheet_id=sheet_id, return_raw=False
         )
-        # preserve order of columns
-        print("data to be pasted (unordered)", data.head())
+        # preserve order of columns by infering data from what's already in the sheet
         if schema is not None:
-            data, e = self.typecast_df(df=data, schema=schema)
-            if e is not None:
-                log.error("append failed due to data typecasting error: %s", e)
-                return e
             data = data.select(curr_data.columns)
-            print("data to be pasted", data.head())
+        else:
+            data = data.select(curr_data[0])
         try:
             tab_id = sheet_props[tab_name]["sheetId"]
         except KeyError as e:

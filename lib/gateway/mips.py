@@ -335,7 +335,7 @@ class MIPSClient(gw.HTTPClient):
             result["error"] = ValueError(
                 f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
             )
-            return result
+        return result
     
     @needs_auth
     def patch_backlight_and_validate_bulk(
@@ -392,6 +392,7 @@ class MIPSClient(gw.HTTPClient):
                 else:
                     res["end_ts"] = ts
                     result.append(res)
+            log.debug("processed %s done items", len(done))
             
             for fut in timed_out:
                 device = fs[fut]
@@ -403,5 +404,6 @@ class MIPSClient(gw.HTTPClient):
                 })
                 log.debug("patching %s timed out due to group timeout setting", device)  # noqa: E501
                 fut.cancel()
+            log.debug("processed %s timed out items", len(timed_out))
 
         return result
