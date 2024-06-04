@@ -35,10 +35,49 @@ DEFAULT_THREAD_COUNT = 20
 # request params
 RPC_BACKLIGHT_ON_STATUS = 1
 RPC_BACKLIGHT_OFF_STATUS = 0
+BACKLIGHT_PARAM_TO_NAME = {
+    RPC_BACKLIGHT_ON_STATUS: "backlight_on",
+    RPC_BACKLIGHT_OFF_STATUS: "backlight_off"
+}
+
+# modes
+SHADOW_MODE = "shadow"
+PROD_MODE = "production"
 
 class InvalidAUTHError(Exception):
     "Raised when response indicates that auth is invalid"
     pass
+
+# entities
+class PatchBacklightAndValidateResult:
+    "Represents result of patch_backlight_and_validate method calls"
+    def __init__(
+            self,
+            device: Optional[int] = None,
+            start_ts: Optional[str] = None,
+            end_ts: Optional[str] = None,
+            backlight_status: Optional[str] = None,
+            error: Optional[Exception] = None,
+            mode: Optional[str] = None 
+        ):
+        "Constructor"
+        self.device = device
+        self.start_ts = start_ts
+        self.backlight_status = backlight_status
+        self.end_ts = end_ts
+        self.error = error
+        self.mode = mode
+
+    def to_dict(self) -> dict:
+        "Converts instance to a dict"
+        return {
+            "device": self.device,
+            "start_ts": self.start_ts,
+            "backlight_status": self.backlight_status,
+            "end_ts": self.end_ts,
+            "error": self.error,
+            "mode": self.mode
+        }
 
 # mappers    
 def _bool_flag_to_int_param(flag: bool) -> int:
@@ -67,7 +106,7 @@ def _get_devices_param_to_request(
 def _patch_backlight_params_to_request(
     device_id: int,
     switch_status: int) -> requests.Request:
-    if switch_status not in {RPC_BACKLIGHT_OFF_STATUS, RPC_BACKLIGHT_ON_STATUS}:  # noqa: E501
+    if switch_status not in BACKLIGHT_PARAM_TO_NAME.keys():
         raise ValueError(f"unexpected switch status: {switch_status}")
     return requests.Request(
         method="PUT",
@@ -308,14 +347,13 @@ class MIPSClient(gw.HTTPClient):
         if shadow_mode is None:
             shadow_mode = True
         
-        # TODO make it an object?
-        result = {
-            "device": device_id,
-            "switch_status": switch_status,
-            "start_ts": utils.get_current_timestamp(),
-            "error": None
-        }
+        result = PatchBacklightAndValidateResult(
+            device=device_id, start_ts=utils.get_current_timestamp(),
+            backlight_status=BACKLIGHT_PARAM_TO_NAME[switch_status],
+            mode=PROD_MODE
+        )
         if shadow_mode:
+            result.mode = SHADOW_MODE
             log.info("no status check for device %s because of shadow mode",
                      device_id)
             return result
@@ -323,16 +361,15 @@ class MIPSClient(gw.HTTPClient):
                                          switch_status=switch_status,
                                          shadow_mode=shadow_mode)
         if patch_err is not None:
-            result["error"] = patch_err
+            result.error = patch_err
             return result
         bl_status, e = self.get_backlight_settings(device_id=device_id)
         if e is not None:
-            result["error"] = e
+            result.error = e
             return result
         
-        
         if bl_status != switch_status:
-            result["error"] = ValueError(
+            result.error = ValueError(
                 f"patch validation failed. switch_status: {switch_status}. actual_status: {bl_status}"  # noqa: E501
             )
         return result
@@ -359,7 +396,7 @@ class MIPSClient(gw.HTTPClient):
         if shadow_mode is None:
             shadow_mode = True
 
-        result = []
+        results = []
         log.debug("starting bulk patching and validation for %s devices with %s threads", len(devices), th_cap)  # noqa: E501
         with futures.ThreadPoolExecutor(max_workers=th_cap, thread_name_prefix=THREAD_PREFIX) as ex:  # noqa: E501
             tasks = [
@@ -376,6 +413,8 @@ class MIPSClient(gw.HTTPClient):
                       len(done), len(done)+len(timed_out))
            
             ts = utils.get_current_timestamp()
+            mode = SHADOW_MODE if shadow_mode else PROD_MODE
+            backlight_status = BACKLIGHT_PARAM_TO_NAME[switch_status]
             for fut in done:
                 # TODO update logging of results
                 device = fs[fut]
@@ -383,27 +422,31 @@ class MIPSClient(gw.HTTPClient):
                     res = fut.result()
                 except Exception as e:
                     log.debug("patch and validate failed for %s: %s", device, e)
-                    result.append({
-                        "device": device, 
-                        "error": e,
-                        "start_ts": ts,
-                        "end_ts": ts
-                    })
+                    results.append(
+                        PatchBacklightAndValidateResult(
+                            device=device, error=e,
+                            start_ts=ts, end_ts=ts,
+                            backlight_status=backlight_status,
+                            mode=mode,
+                        )
+                    )
                 else:
-                    res["end_ts"] = ts
-                    result.append(res)
+                    res.end_ts = ts
+                    results.append(res)
             log.debug("processed %s done items", len(done))
             
             for fut in timed_out:
                 device = fs[fut]
-                result.append({
-                    "device": device, 
-                    "error": f"group timeout ({group_timeout}) breached",
-                    "start_ts": ts,
-                    "end_ts": ts
-                })
+                results.append(
+                    PatchBacklightAndValidateResult(
+                        device=device,
+                        error=TimeoutError(f"group timeout ({group_timeout}) breached"),  # noqa: E501
+                        start_ts=ts, end_ts=ts,
+                        backlight_status=backlight_status,
+                        mode=mode
+                    )
+                )
                 log.debug("patching %s timed out due to group timeout setting", device)  # noqa: E501
                 fut.cancel()
             log.debug("processed %s timed out items", len(timed_out))
-
-        return result
+        return results

@@ -4,7 +4,7 @@ Module implements high level logic of MIPS workflows
 import logging
 from concurrent import futures
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, Optional
 
 import polars as pl
 
@@ -41,8 +41,37 @@ class WorkflowError(Exception):
 class WorkflowTask:
     "Abstraction encapsulating workflow callable and arguments"
     def __init__(self, executable: Callable, args: list):
+        "Constructor"
         self.executable = executable
         self.args = args
+
+
+class WorkflowResult:
+    "Represents workflow execution result"
+    def __init__(
+        self,
+        workflow: str,
+        start_ts: str,
+        mode: str,
+        end_ts: Optional[str] = None,
+        error: Optional[Exception] = None
+    ):
+        "Constructor"
+        self.workflow = workflow
+        self.start_ts = start_ts
+        self.end_ts = end_ts
+        self.error = error
+        self.mode = mode
+
+    def to_dict(self) -> dict:
+        "Converts instance to a dict"
+        return {
+            "workflow": self.workflow,
+            "start_ts": self.start_ts,
+            "end_ts": self.end_ts,
+            "error": self.error,
+            "mode": self.mode
+        }
 
 
 class App:
@@ -139,11 +168,10 @@ class App:
             results = [fut.result() for fut in futures.as_completed(workflows)]
         log.info("%s tasks executed. result count: %s",
                  len(workflows), len(results))
-        #TODO order columns
         e = self.sheets.append_data(
             sheet_id=self.cfg.sheets.spreadsheet,
             tab_name=self.cfg.sheets.tabs["execute_logs"]["name"],
-            data=pl.DataFrame(data=results),
+            data=pl.DataFrame(data=[r.to_dict() for r in results]),
             row_limit=self.cfg.sheets.tabs["execute_logs"]["row_limit"],
             schema=self.cfg.sheets.tabs["execute_logs"]["schema"]
         )
@@ -165,15 +193,16 @@ class App:
             dict describing results.
         """  # noqa: E501
         log.info("executing patch_backlight workflow")
-        result = {
-            "workflow": PATCH_BACKLIGHT_WORKFLOW_NAME,
-            "start_ts": utils.get_current_timestamp()
-        }
+        result = WorkflowResult(
+            workflow=PATCH_BACKLIGHT_WORKFLOW_NAME,
+            start_ts=utils.get_current_timestamp(),
+            mode=mode
+        )
         devices, e = self.mips_api_client.get_devices()
         log.info("fetched %s devices", len(devices))
         if e is not None:
-            result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")
-            result["end_ts"] = utils.get_current_timestamp()
+            result.error = WorkflowError(f"patch_backlight failed to get devices: {e}")
+            result.end_ts = utils.get_current_timestamp()
             return result
         devices = {int(device["id"]) for device in devices}
         log.info("converted devices to a list of ids")
@@ -187,17 +216,19 @@ class App:
         e = self.sheets.append_data(
             sheet_id=self.cfg.sheets.spreadsheet,
             tab_name=self.cfg.sheets.tabs["patch_backlight_logs"]["name"],
-            data=pl.DataFrame(data=results),
+            data=pl.DataFrame(data=[r.to_dict() for r in results]),
             row_limit=self.cfg.sheets.tabs["patch_backlight_logs"]["row_limit"],
             schema=self.cfg.sheets.tabs["patch_backlight_logs"]["schema"]
         )
-        result["end_ts"] = utils.get_current_timestamp()
+        result.end_ts = utils.get_current_timestamp()
         if e is not None:
-            result["error"] = WorkflowError(f"patch_backlight failed to get devices: {e}")  # noqa: E501
-            return result
+            result.error = WorkflowError(f"patch_backlight failed to get devices: {e}")  # noqa: E501
+        log.info("pasted results to spreadsheet")
         # TODO message to telegram?
         return result
         # TODO finish E2E testing
+        # TODO make backlight status more user friendly
+        # TODO start logging mode
 
     
     

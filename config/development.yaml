@@ -67,9 +67,9 @@ google_sheets:
         end_ts:
           sheet_name: "end_ts"
           type: "Utf8"
-        switch_status:
-          sheet_name: "switch_status"
-          type: "Int32"
+        backlight_status:
+          sheet_name: "backlight_status"
+          type: "Utf8"
         error:
           sheet_name: "error"
           type: "Utf8"
