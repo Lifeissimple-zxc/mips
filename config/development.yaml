@@ -12,6 +12,9 @@ mips:
 
 secrets_yaml: "secrets/secrets.yaml"
 
+telegram:
+  chat: -4228798910
+
 google_sheets:
   spreadsheet: "1AICxqzT_Cy-qoswGLhwsu5dSqJal26fxM4MeodBoHjI"
   tabs:

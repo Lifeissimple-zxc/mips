@@ -226,9 +226,8 @@ class App:
         log.info("pasted results to spreadsheet")
         # TODO message to telegram?
         return result
-        # TODO finish E2E testing
-        # TODO make backlight status more user friendly
-        # TODO start logging mode
+        # TODO tg gateway
+        # TODO move logging to info
 
     
     

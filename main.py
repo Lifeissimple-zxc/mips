@@ -33,8 +33,15 @@ def main():
         ),
         cfg=app_config
     )
-    # actual execution
-    app.execute_tasks()
+    
+    # bulk sheet tasks
+    e = app.execute_tasks()
+    if e is not None:
+        log.error("tasks execution resulted in an error: %s", e)
+        raise e
+    # TODO implement telegram messaging and logging
+    # TODO PROD config
+    # TODO rps settings for gateways (blanket and by method)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ Module implements a base gateway class powered by requests module.
 """
 import atexit
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 import requests
 import retry
@@ -15,8 +15,14 @@ log = logging.getLogger("main_logger")
 
 # RPS config parsing modes
 RPS_PARSE_BY_METHOD_MODE = 0
+RPS_PARSE_BLANKET_MODE = 0
 _MODE_TO_NAME = {
-    RPS_PARSE_BY_METHOD_MODE: "method"
+    RPS_PARSE_BY_METHOD_MODE: "method",
+    RPS_PARSE_BLANKET_MODE: "blanket"
+}
+_NAME_TO_MODE = {
+    "method": RPS_PARSE_BY_METHOD_MODE,
+    "blanket": RPS_PARSE_BLANKET_MODE
 }
 
 
@@ -47,14 +53,24 @@ class HTTPClient:
         self.rps_by_method = None
         atexit.register(self.sesh.close)
 
-    def _parse_rps_config(self, cfg: dict, mode: Optional[int] = None):
+    @staticmethod
+    def _parse_mode(mode: Union[int,str]) -> int:
+        if isinstance(mode, str):
+            return _NAME_TO_MODE.get(mode.lower(), None)
+        elif isinstance(mode, int):
+            if mode not in _MODE_TO_NAME.keys():
+                raise NotImplementedError("provided mode is not supported")
+            return mode
+        else:
+            raise NotImplementedError("mode argument is of unsupported type: %s", type(mode))  # noqa: E501
+    
+    def _parse_rps_config(self, cfg: dict,
+                          mode: Optional[Union[int,str]] = None):
         "Parses and configures client RPS limits"
         if mode is None:
-            mode = RPS_PARSE_BY_METHOD_MODE
+            mode = RPS_PARSE_BLANKET_MODE
         # TODO add other modes
-        if mode not in {RPS_PARSE_BY_METHOD_MODE}:
-            raise NotImplementedError("provided mode is not supported")
-        self.mode = mode
+        self.mode = self._parse_mode(mode=mode)
         rps_setup = {}
         mode_name = _MODE_TO_NAME[self.mode]
         log.debug("parsing rps config with mode %s", mode_name)
@@ -66,6 +82,8 @@ class HTTPClient:
     @staticmethod
     def response_to_exception(r: requests.Response) -> Exception:
         "Converts status code of a response to an exception"
+        if r.status_code == 200:
+            return
         msg = f"status code: {r.status_code}. details: {r.text}"
         if 400 <= r.status_code < 500:
             return ClientError(msg)
