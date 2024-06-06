@@ -8,12 +8,14 @@ import queue
 from logging import config, handlers
 from typing import Optional
 
+from lib.gateway import telegram
+
 # from lib.gateways import tg
 
 _LOG_QUEUE = queue.Queue() # used in logging yaml
 
-main_logger = logging.getLogger("main_logger")
-backup_logger = logging.getLogger("backup_logger")
+log = logging.getLogger("main_logger")
+backup_log = logging.getLogger("backup_logger")
 
 
 class QListenerHandler(handlers.QueueHandler):
@@ -160,29 +162,33 @@ class BackupFileHandler(handlers.TimedRotatingFileHandler):
         super().__init__(filename=log_file, when="MIDNIGHT", utc=True)
 
 
-# class TGHandler(logging.Handler):
-#     "Handles logging to telegram"
-#     def __init__(self, gw: tg.TelegramGateway):
-#         "Constructor of the class"
-#         # TODO implement people to tag
-#         super().__init__()
-#         self.gw = gw
+class TGHandler(logging.Handler):
+    "Handles logging to telegram"
+    def __init__(self, gw: telegram.TelegramGateway):
+        "Constructor of the class"
+        # TODO implement people to tag
+        # tagging requires specific formatting: https://core.telegram.org/bots/api#formatting-options
+        # https://core.telegram.org/bots/api#markdown-style parse mode param 
+        super().__init__()
+        self.gw = gw
 
-#     def _prepare_message(self, record: logging.LogRecord) -> str:
-#         """
-#         Creates a formatted message using info from the record
-#         """
-#         msg_str = f"{self.format(record)}"
-#         # Add urgency if record message is above warning + tag POCs
-#         if record.levelno >= 30:
-#             msg_str = f"\u26A0\uFE0F {msg_str}"
-#         return msg_str
+    def _prepare_message(self, record: logging.LogRecord) -> str:
+        """
+        Creates a formatted message using info from the record
+        """
+        msg_str = f"{self.format(record)}"
+        # Add urgency if record message is above warning + tag POCs
+        if record.levelno >= 30:
+            msg_str = f"\u26A0\uFE0F {msg_str}"
+        return msg_str
 
-#     def _log_to_tg(self, record: logging.LogRecord) -> None:
-#         self.gw.send_message(self._prepare_message(record=record), is_log=True)
+    def _log_to_tg(self, record: logging.LogRecord) -> None:
+        self.gw.send_message(
+            msg=self._prepare_message(record=record), is_log=True
+        )
 
-#     def emit(self, record: logging.LogRecord) -> None:
-#         """
-#         Actually performs logging
-#         """
-#         self._log_to_tg(record=record)
+    def emit(self, record: logging.LogRecord) -> None:
+        """
+        Actually performs logging
+        """
+        self._log_to_tg(record=record)

@@ -66,7 +66,8 @@ class TelegramGateway(gw.HTTPClient):
             data=msg_data
         )
     
-    def send_message(self, msg: str, is_log: Optional[bool] = None) -> Exception:
+    def send_message(self, msg: str,
+                     is_log: Optional[bool] = None) -> Exception:
         """Sends a telegram message via an HTTP post request
 
         Args:

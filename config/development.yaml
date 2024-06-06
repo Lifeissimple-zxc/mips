@@ -13,7 +13,9 @@ mips:
 secrets_yaml: "secrets/secrets.yaml"
 
 telegram:
-  chat: -4228798910
+  chat_id: -4228798910
+  log_chat_id: -4228798910
+  timeout: 10
 
 google_sheets:
   spreadsheet: "1AICxqzT_Cy-qoswGLhwsu5dSqJal26fxM4MeodBoHjI"
