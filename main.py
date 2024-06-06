@@ -34,7 +34,6 @@ def main():
         cfg=app_config
     )
     
-    # bulk sheet tasks
     e = app.execute_tasks()
     if e is not None:
         log.error("tasks execution resulted in an error: %s", e)
@@ -43,6 +42,7 @@ def main():
     # TODO add telegram properties to config and app object
     # TODO PROD config
     # TODO rps settings for gateways (blanket and by method)
+    # TODO telegram messages on workflow finish
 
 
 if __name__ == "__main__":

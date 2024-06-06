@@ -14,6 +14,7 @@ log = logging.getLogger("main_logger")
 MSG_CHAR_LIMIT = 4096
 BASE_URL = "https://api.telegram.org"
 SEND_MSG_ENDPOINT = "sendMessage"
+MARKDOWN_PARSE_MODE = "MarkdownV2"
 
 class TelegramGateway(gw.HTTPClient):
     "Sends telegram messages"
@@ -44,21 +45,39 @@ class TelegramGateway(gw.HTTPClient):
     def _truncate_to_char_limit(msg: str):
         return msg[:MSG_CHAR_LIMIT]
     
+    @staticmethod
+    def _tag_wrapper(msg: str, user_to_tag: int):
+        return f"[{msg}](tg://user?id={user_to_tag})"
+    
     def _message_params_to_body(self, msg: str, is_log: bool) -> dict:
         if is_log:
             return {
                 **self.log_message_data, 
-                **{"text": self._truncate_to_char_limit(msg=msg)}
+                **{
+                    "text": self._truncate_to_char_limit(msg=msg),
+                    "parse_mode": MARKDOWN_PARSE_MODE
+                }
             }
         return {
             **self.base_message_data,
-            **{"text": self._truncate_to_char_limit(msg=msg)}
+            **{
+                "text": self._truncate_to_char_limit(msg=msg),
+                "parse_mode": MARKDOWN_PARSE_MODE
+            }
         }
     
     def _message_params_to_request(
-        self, msg: str, is_log: bool
+        self,
+        msg: str,
+        is_log: bool,
+        user_to_tag: Optional[int] = None
     ) -> requests.Request:
-        msg_data = self._message_params_to_body(msg=msg, is_log=is_log)
+        if user_to_tag is not None:
+            msg = self._tag_wrapper(msg=msg, user_to_tag=user_to_tag)
+        msg_data = self._message_params_to_body(
+            msg=msg,
+            is_log=is_log
+        )
         log.debug("prepared telegram message boby: %s", msg_data)
         return requests.Request(
             method="POST",
@@ -67,7 +86,8 @@ class TelegramGateway(gw.HTTPClient):
         )
     
     def send_message(self, msg: str,
-                     is_log: Optional[bool] = None) -> Exception:
+                     is_log: Optional[bool] = None,
+                     user_to_tag: Optional[int] = None) -> Exception:
         """Sends a telegram message via an HTTP post request
 
         Args:
@@ -82,7 +102,9 @@ class TelegramGateway(gw.HTTPClient):
 
         try:
             self.make_request(
-                req=self._message_params_to_request(msg=msg, is_log=is_log)
+                req=self._message_params_to_request(
+                    msg=msg, is_log=is_log, user_to_tag=user_to_tag
+                )
             )
         except Exception as e:
             # TODO handle high RPS (429ish scenario)

@@ -164,13 +164,15 @@ class BackupFileHandler(handlers.TimedRotatingFileHandler):
 
 class TGHandler(logging.Handler):
     "Handles logging to telegram"
-    def __init__(self, gw: telegram.TelegramGateway):
+    def __init__(self, gw: telegram.TelegramGateway,
+                 user_to_tag_on_error: Optional[int] = None):
         "Constructor of the class"
         # TODO implement people to tag
         # tagging requires specific formatting: https://core.telegram.org/bots/api#formatting-options
         # https://core.telegram.org/bots/api#markdown-style parse mode param 
         super().__init__()
         self.gw = gw
+        self.user_to_tag_on_error = user_to_tag_on_error
 
     def _prepare_message(self, record: logging.LogRecord) -> str:
         """
@@ -183,6 +185,12 @@ class TGHandler(logging.Handler):
         return msg_str
 
     def _log_to_tg(self, record: logging.LogRecord) -> None:
+        if self.user_to_tag_on_error is not None and record.levelno >= 30:
+            self.gw.send_message(
+                msg=self._prepare_message(record=record),
+                is_log=True, user_to_tag=self.user_to_tag_on_error
+            )
+            return
         self.gw.send_message(
             msg=self._prepare_message(record=record), is_log=True
         )
