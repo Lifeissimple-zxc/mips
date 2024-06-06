@@ -40,6 +40,7 @@ def main():
         log.error("tasks execution resulted in an error: %s", e)
         raise e
     # TODO implement telegram messaging and logging
+    # TODO add telegram properties to config and app object
     # TODO PROD config
     # TODO rps settings for gateways (blanket and by method)
 
