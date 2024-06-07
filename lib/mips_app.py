@@ -8,7 +8,7 @@ from typing import Callable, Optional
 
 import polars as pl
 
-from lib.gateway import google_sheets, mips
+from lib.gateway import google_sheets, mips, telegram
 from lib.internal import configurator, utils
 
 log = logging.getLogger("main_logger")
@@ -80,6 +80,7 @@ class App:
             self,
             sheets: google_sheets.GoogleSheetsGateway,
             mips_api_client: mips.MIPSClient,
+            telegram: telegram.TelegramGateway,
             cfg: configurator.Configurator
         ):
         """Constructs the application.
@@ -90,7 +91,7 @@ class App:
         """
         self.sheets = sheets
         self.mips_api_client = mips_api_client
-        # TODO change it to a config object?
+        self.telegram = telegram
         self.cfg = cfg
 
     def _task_name_to_executable(self, name: str):
@@ -179,7 +180,7 @@ class App:
             return WorkflowError(f"execute_tasks failed to append task logs to sheet: {e}")  # noqa: E501
         log.info("task execution data pasted to sheet")
 
-    def patch_backlight(self, mode: str, switch_status: str) -> Exception:
+    def patch_backlight(self, mode: str, switch_status: int) -> Exception:
         """Executes patch_backlight workflow. Steps:
             1. Get devices from mips API.
             2. Patch backlight to switch status for each device from step 1.
@@ -187,12 +188,16 @@ class App:
 
         Args:
             mode (str): operation mode (shadow means to write calls to the API is made.)
-            switch_status (str): backlight status to set.
+            switch_status (int): backlight status to set.
 
         Returns:
             dict describing results.
         """  # noqa: E501
-        log.info("executing patch_backlight workflow")
+        status_name = mips.BACKLIGHT_PARAM_TO_NAME[switch_status]
+        log.info(
+            "executing patch_backlight workflow, mode: %s, switch_status: %s",
+            mode, status_name
+        )
         result = WorkflowResult(
             workflow=PATCH_BACKLIGHT_WORKFLOW_NAME,
             start_ts=utils.get_current_timestamp(),
@@ -223,11 +228,16 @@ class App:
         result.end_ts = utils.get_current_timestamp()
         if e is not None:
             result.error = WorkflowError(f"patch_backlight failed to get devices: {e}")  # noqa: E501
+            self.telegram.send_message(
+                msg=f"patch_backlight workflow resulted in an error: {result.error}", # noqa: E501
+                user_to_tag=self.cfg.telegram.user_to_tag
+            )
         log.info("pasted results to spreadsheet")
-        # TODO message to telegram?
+        self.telegram.send_message(
+            msg=f"patch_backlight workflow success. mode: {mode}. switch_status: {status_name}",  # noqa: E501
+            user_to_tag=self.cfg.telegram.user_to_tag
+        )
         return result
-        # TODO tg gateway
-        # TODO move logging to info
 
     
     

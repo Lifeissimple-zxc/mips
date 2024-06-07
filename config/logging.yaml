@@ -36,7 +36,7 @@ handlers:
   TGErrorHandler:
     (): "lib.internal.logger.TGHandler"
     gw: "ext://lib.setup.TG_GW"
-    user_to_tag_on_error: 335963598 # Makar TG ID
+    user_to_tag_on_error: 335963598
     filters:
       - "TGErrorFilter"
       - "TGSilencer"

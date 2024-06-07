@@ -59,13 +59,15 @@ class TelegramConfig:
         bot_secret: str,
         chat_id: int,
         log_chat_id: int,
-        timeout: int
+        timeout: int,
+        user_to_tag: int,
     ):
         "Constructor"
         self.bot_secret = bot_secret
         self.chat_id = chat_id
         self.log_chat_id = log_chat_id
         self.timeout = timeout
+        self.user_to_tag = user_to_tag
 
 
 class Configurator:
@@ -108,5 +110,6 @@ class Configurator:
             bot_secret=secret_data[TELEGRAM_CONFIG_KEY]["bot_secret"],
             chat_id=config_data[TELEGRAM_CONFIG_KEY]["chat_id"],
             log_chat_id=config_data[TELEGRAM_CONFIG_KEY]["log_chat_id"],
-            timeout=config_data[TELEGRAM_CONFIG_KEY]["timeout"]
+            timeout=config_data[TELEGRAM_CONFIG_KEY]["timeout"],
+            user_to_tag=config_data[TELEGRAM_CONFIG_KEY]["user_to_tag"]
         )

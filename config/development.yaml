@@ -16,6 +16,7 @@ telegram:
   chat_id: -4228798910
   log_chat_id: -4228798910
   timeout: 10
+  user_to_tag: 335963598
 
 google_sheets:
   spreadsheet: "1AICxqzT_Cy-qoswGLhwsu5dSqJal26fxM4MeodBoHjI"

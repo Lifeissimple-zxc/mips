@@ -7,7 +7,7 @@ import yaml
 
 from lib import mips_app
 from lib.gateway import google_sheets, mips
-from lib.setup import app_config
+from lib.setup import TG_GW, app_config
 
 # logging setup
 with open("config/logging.yaml") as _f:
@@ -31,6 +31,7 @@ def main():
             password=app_config.mips.password,
             timeout=app_config.mips.timeout
         ),
+        telegram=TG_GW,
         cfg=app_config
     )
     
@@ -38,11 +39,11 @@ def main():
     if e is not None:
         log.error("tasks execution resulted in an error: %s", e)
         raise e
-    # TODO implement telegram messaging and logging
-    # TODO add telegram properties to config and app object
-    # TODO PROD config
     # TODO rps settings for gateways (blanket and by method)
-    # TODO telegram messages on workflow finish
+        # mips first - then test
+        # then telegram
+    # TODO PROD config
+    # TODO documentation
 
 
 if __name__ == "__main__":

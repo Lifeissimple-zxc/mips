@@ -6,6 +6,7 @@ import logging
 from typing import Optional
 
 import requests
+import jinja2
 
 from lib.gateway.base import gw
 
@@ -15,6 +16,8 @@ MSG_CHAR_LIMIT = 4096
 BASE_URL = "https://api.telegram.org"
 SEND_MSG_ENDPOINT = "sendMessage"
 MARKDOWN_PARSE_MODE = "MarkdownV2"
+HTML_PARSE_MODE = "HTML"
+TAG_TMPL = """<a href="tg://user?id={{ user_to_tag }}">{{ msg }}</a>"""
 
 class TelegramGateway(gw.HTTPClient):
     "Sends telegram messages"
@@ -47,7 +50,10 @@ class TelegramGateway(gw.HTTPClient):
     
     @staticmethod
     def _tag_wrapper(msg: str, user_to_tag: int):
-        return f"[{msg}](tg://user?id={user_to_tag})"
+        return jinja2.Template(source=TAG_TMPL).render(
+            user_to_tag=user_to_tag,
+            msg=msg
+        )
     
     def _message_params_to_body(self, msg: str, is_log: bool) -> dict:
         if is_log:
@@ -55,14 +61,14 @@ class TelegramGateway(gw.HTTPClient):
                 **self.log_message_data, 
                 **{
                     "text": self._truncate_to_char_limit(msg=msg),
-                    "parse_mode": MARKDOWN_PARSE_MODE
+                    "parse_mode": HTML_PARSE_MODE
                 }
             }
         return {
             **self.base_message_data,
             **{
                 "text": self._truncate_to_char_limit(msg=msg),
-                "parse_mode": MARKDOWN_PARSE_MODE
+                "parse_mode": HTML_PARSE_MODE
             }
         }
     

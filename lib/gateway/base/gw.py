@@ -74,6 +74,9 @@ class HTTPClient:
         rps_setup = {}
         mode_name = _MODE_TO_NAME[self.mode]
         log.debug("parsing rps config with mode %s", mode_name)
+        if self.mode == RPS_PARSE_BLANKET_MODE:
+            self.base_rps_limiter = rps_limiter.ThreadingLimiter(**cfg)
+            return
         for key, setup in cfg[mode_name].items():
             rps_setup[key] = rps_limiter.ThreadingLimiter(**setup)
         if self.mode == RPS_PARSE_BY_METHOD_MODE:
@@ -124,6 +127,7 @@ class HTTPClient:
     def _request_wrapper(self, req: requests.Request) -> requests.Response:
         # choose limiter
         limiter = None
+        # TODO select limiter based on rps parsing mode
         if self.rps_by_method is not None:
             limiter = self.rps_by_method.get(req.method.lower(), None)
         # TODO implement endpoint-specific limiting if needed

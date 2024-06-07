@@ -167,9 +167,6 @@ class TGHandler(logging.Handler):
     def __init__(self, gw: telegram.TelegramGateway,
                  user_to_tag_on_error: Optional[int] = None):
         "Constructor of the class"
-        # TODO implement people to tag
-        # tagging requires specific formatting: https://core.telegram.org/bots/api#formatting-options
-        # https://core.telegram.org/bots/api#markdown-style parse mode param 
         super().__init__()
         self.gw = gw
         self.user_to_tag_on_error = user_to_tag_on_error
