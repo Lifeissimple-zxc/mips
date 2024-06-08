@@ -3,10 +3,12 @@ Module implements a simple gateway to send messages to telegram messenger
 """
 import atexit
 import logging
-from typing import Optional
+from typing import Optional, Union
+import time
 
-import requests
 import jinja2
+import requests
+import retry
 
 from lib.gateway.base import gw
 
@@ -19,22 +21,51 @@ MARKDOWN_PARSE_MODE = "MarkdownV2"
 HTML_PARSE_MODE = "HTML"
 TAG_TMPL = """<a href="tg://user?id={{ user_to_tag }}">{{ msg }}</a>"""
 
+class TooManyRequestsError(Exception):
+    "Raised when telegram returns a 429"
+    def __init__(self, msg: str, sleep_for: int):
+        "Constructor"
+        self.msg = msg
+        self.sleep_for = sleep_for
+
+
 class TelegramGateway(gw.HTTPClient):
     "Sends telegram messages"
     def __init__(self, bot_secret: str,
-                 chat_id: int, log_chat_id: int,
-                 timeout: int):
+                 chat_id: int, log_chat_id: int, timeout: int,
+                 rps_config: Optional[dict] = None,
+                 rps_config_parsing_mode: Optional[Union[int,str]] = None):
         "Constructor"
         self.send_msg_url = self._prepare_updates_chat_url(
             bot_secret=bot_secret,
             base_url=BASE_URL,
             send_msg_endpoint=SEND_MSG_ENDPOINT
         )
-        super().__init__(timeout=timeout)
+        super().__init__(timeout=timeout, rps_config=rps_config,
+                         rps_config_parsing_mode=rps_config_parsing_mode)
         self.base_message_data = {"chat_id": chat_id}
         self.log_message_data = {"chat_id": log_chat_id}
         self.sesh = requests.session()
         atexit.register(self.sesh.close)
+    
+    @staticmethod
+    def response_to_exception(r: requests.Response) -> Exception:
+        "Converts status code of a response to an exception"
+        if r.status_code == 200:
+            return
+        msg = f"status code: {r.status_code}. details: {r.text}"
+        if r.status_code == 429:
+            data = r.json()
+            return TooManyRequestsError(
+                msg=msg,
+                sleep_for=int(data["parameters"]["retry_after"])
+            )
+        elif 400 <= r.status_code < 500:
+            return gw.ClientError(msg)
+        elif 500 <= r.status_code < 600:
+            return gw.ServerError(msg)
+        else:
+            return gw.UnexpectedStatusCodeError(msg)
     
     @staticmethod
     def _prepare_updates_chat_url(bot_secret: str, base_url: str,
@@ -91,6 +122,8 @@ class TelegramGateway(gw.HTTPClient):
             data=msg_data
         )
     
+    @retry.retry(exceptions=(TooManyRequestsError,),
+                 backoff=2, tries=3 ,delay=1, logger=log)
     def send_message(self, msg: str,
                      is_log: Optional[bool] = None,
                      user_to_tag: Optional[int] = None) -> Exception:
@@ -112,8 +145,12 @@ class TelegramGateway(gw.HTTPClient):
                     msg=msg, is_log=is_log, user_to_tag=user_to_tag
                 )
             )
+        except TooManyRequestsError as e:
+            log.debug("TooManyRequestsError hit, sleeping for %s",
+                      e.sleep_for)
+            time.sleep(e.sleep_for)
+            raise e
         except Exception as e:
-            # TODO handle high RPS (429ish scenario)
             log.error("error sending message: %s", e)
             return e
 

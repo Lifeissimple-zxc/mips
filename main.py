@@ -29,7 +29,9 @@ def main():
         mips_api_client=mips.MIPSClient(
             user=app_config.mips.user,
             password=app_config.mips.password,
-            timeout=app_config.mips.timeout
+            timeout=app_config.mips.timeout,
+            rps_config=app_config.mips.rps_config,
+            rps_config_parsing_mode=app_config.mips.rps_config_parsing_mode
         ),
         telegram=TG_GW,
         cfg=app_config
@@ -39,9 +41,6 @@ def main():
     if e is not None:
         log.error("tasks execution resulted in an error: %s", e)
         raise e
-    # TODO rps settings for gateways (blanket and by method)
-        # mips first - then test
-        # then telegram
     # TODO PROD config
     # TODO documentation
 

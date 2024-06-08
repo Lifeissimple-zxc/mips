@@ -1,10 +1,12 @@
 """
 Module implements a ratelimiter to be used by gateways
 """
+import logging
 import threading
 import time
 from typing import Optional
 
+log = logging.getLogger("main_logger")
 
 class ThreadingLimiter:
     """
@@ -31,12 +33,12 @@ class ThreadingLimiter:
         if self.concurrency:
             self.sem.acquire()
         with self.rps_lock:
-            time.sleep(
-                max(
-                    0.,
-                    self.interval_ms-((time.time() * 1000)-self.last_request_time))  # noqa: E501
-                /1000
-            )
+            to_sleep = max(
+                float(0),
+                self.interval_ms-((time.time() * 1000)-self.last_request_time)
+            ) / 1000
+            log.debug("sleeping for %s due to RPS config", to_sleep)
+            time.sleep(to_sleep)
             self.last_request_time = time.time() * 1000
 
     def __exit__(self, exc_type, exc, tb):  # noqa: D105

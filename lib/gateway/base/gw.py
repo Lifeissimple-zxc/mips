@@ -15,7 +15,7 @@ log = logging.getLogger("main_logger")
 
 # RPS config parsing modes
 RPS_PARSE_BY_METHOD_MODE = 0
-RPS_PARSE_BLANKET_MODE = 0
+RPS_PARSE_BLANKET_MODE = 1
 _MODE_TO_NAME = {
     RPS_PARSE_BY_METHOD_MODE: "method",
     RPS_PARSE_BLANKET_MODE: "blanket"
@@ -44,13 +44,18 @@ class HTTPClient:
 
     def __init__(self, timeout: int,
                  rps_config: Optional[dict] = None,
-                 rps_config_parsing_mode: Optional[int] = None):
+                 rps_config_parsing_mode: Optional[Union[int,str]] = None):
         "Constructor"
+        log.debug(
+            "instantiating HTTP client with timeout %s, rps config %s and parsing mode %s",
+            timeout, rps_config, rps_config_parsing_mode
+        )
+        self.rps_by_method = None
+        self.base_rps_limiter = None
         self.timeout = timeout
         self.sesh = requests.session()
         if rps_config is not None and rps_config_parsing_mode is not None:
             self._parse_rps_config(cfg=rps_config, mode=rps_config_parsing_mode)
-        self.rps_by_method = None
         atexit.register(self.sesh.close)
 
     @staticmethod
@@ -67,20 +72,27 @@ class HTTPClient:
     def _parse_rps_config(self, cfg: dict,
                           mode: Optional[Union[int,str]] = None):
         "Parses and configures client RPS limits"
+        log.debug("parsing rps config with mode %s", mode)
         if mode is None:
             mode = RPS_PARSE_BLANKET_MODE
-        # TODO add other modes
         self.mode = self._parse_mode(mode=mode)
         rps_setup = {}
         mode_name = _MODE_TO_NAME[self.mode]
-        log.debug("parsing rps config with mode %s", mode_name)
+        log.debug("rps config mode name %s", mode_name)
+        # base
         if self.mode == RPS_PARSE_BLANKET_MODE:
+            log.debug("rps parsing mode: %s. Setting self.base_rps_limiter",
+                      mode_name)
             self.base_rps_limiter = rps_limiter.ThreadingLimiter(**cfg)
             return
         for key, setup in cfg[mode_name].items():
             rps_setup[key] = rps_limiter.ThreadingLimiter(**setup)
+        # by method
         if self.mode == RPS_PARSE_BY_METHOD_MODE:
+            log.debug("rps parsing mode: %s. Setting limiters by method: %s",
+                      mode_name, rps_setup)
             self.rps_by_method = rps_setup
+            return
 
     @staticmethod
     def response_to_exception(r: requests.Response) -> Exception:
@@ -127,10 +139,16 @@ class HTTPClient:
     def _request_wrapper(self, req: requests.Request) -> requests.Response:
         # choose limiter
         limiter = None
-        # TODO select limiter based on rps parsing mode
         if self.rps_by_method is not None:
+            log.debug("rps limiting by method is enabled")
             limiter = self.rps_by_method.get(req.method.lower(), None)
-        # TODO implement endpoint-specific limiting if needed
+            log.debug("limiter %s was selected by request method name %s",
+                      limiter, req.method.lower())
+        elif self.base_rps_limiter is not None:
+            log.debug("base rps limiting is enabled")
+            limiter = self.base_rps_limiter
+            log.debug("limiter %s was selected based on self.base_rps_limiter attr",
+                      limiter)
         return self._make_request(req=req, limiter=limiter)
     
     def make_request(self, req: requests.Request) -> requests.Response:

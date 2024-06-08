@@ -4,6 +4,7 @@ Module implements custom config parser
 import logging
 import os
 import pathlib
+from typing import Union
 
 import dotenv
 import yaml
@@ -42,13 +43,13 @@ class MIPSConfig:
             password: str,
             timeout: int,
             rps_config: dict,
-            rps_config_parsing_mode: int
+            rps_config_parsing_mode: Union[str,int]
         ):
         "Constructor"
         self.user = user
         self.password = password
         self.timeout = timeout
-        self.rps_config = rps_config,
+        self.rps_config = rps_config
         self.rps_config_parsing_mode = rps_config_parsing_mode
         
 
@@ -61,6 +62,8 @@ class TelegramConfig:
         log_chat_id: int,
         timeout: int,
         user_to_tag: int,
+        rps_config: dict,
+        rps_config_parsing_mode: Union[str,int]
     ):
         "Constructor"
         self.bot_secret = bot_secret
@@ -68,6 +71,8 @@ class TelegramConfig:
         self.log_chat_id = log_chat_id
         self.timeout = timeout
         self.user_to_tag = user_to_tag
+        self.rps_config = rps_config
+        self.rps_config_parsing_mode = rps_config_parsing_mode
 
 
 class Configurator:
@@ -95,7 +100,6 @@ class Configurator:
         with open(file=pathlib.Path(config_dir, f"{env}.yaml"), encoding="utf-8") as _f:  # noqa: E501
             config_data = yaml.safe_load(stream=_f)
         self.secrets = config_data[SECRETS_YAML_KEY]
-        # parse yaml config - TODO
         self.sheets = SheetsConfig(**config_data[GSHEET_CONFIG_KEY])
 
         # secrets
@@ -104,12 +108,16 @@ class Configurator:
         self.mips = MIPSConfig(
             user=secret_data[MIPS_CONFIG_KEY]["user"],
             password=secret_data[MIPS_CONFIG_KEY]["password"],
-            **config_data[MIPS_CONFIG_KEY]
+            timeout=config_data[MIPS_CONFIG_KEY]["timeout"],
+            rps_config=config_data[MIPS_CONFIG_KEY]["rps_config"],
+            rps_config_parsing_mode=config_data[MIPS_CONFIG_KEY]["rps_config_parsing_mode"]
         )
         self.telegram = TelegramConfig(
             bot_secret=secret_data[TELEGRAM_CONFIG_KEY]["bot_secret"],
             chat_id=config_data[TELEGRAM_CONFIG_KEY]["chat_id"],
             log_chat_id=config_data[TELEGRAM_CONFIG_KEY]["log_chat_id"],
             timeout=config_data[TELEGRAM_CONFIG_KEY]["timeout"],
-            user_to_tag=config_data[TELEGRAM_CONFIG_KEY]["user_to_tag"]
+            user_to_tag=config_data[TELEGRAM_CONFIG_KEY]["user_to_tag"],
+            rps_config=config_data[TELEGRAM_CONFIG_KEY]["rps_config"],
+            rps_config_parsing_mode=config_data[TELEGRAM_CONFIG_KEY]["rps_config_parsing_mode"]
         )

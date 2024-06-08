@@ -4,7 +4,7 @@ Module implements client for interacting with DC MIPS api.
 import logging
 import re
 from concurrent import futures
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Union
 
 import requests
 
@@ -13,7 +13,6 @@ from lib.internal import utils
 
 log = logging.getLogger("main_logger")
 
-# TODO telegram logging
 # TODO tests
 
 
@@ -166,7 +165,9 @@ class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
     def __init__(self, user: str, password: str, timeout: int,
-                 auto_auth: Optional[bool] = None):
+                 auto_auth: Optional[bool] = None,
+                 rps_config: Optional[dict] = None,
+                 rps_config_parsing_mode: Optional[Union[int,str]] = None):
         """Instantiates MIPS client
 
         Args:
@@ -187,7 +188,8 @@ class MIPSClient(gw.HTTPClient):
             "lang": CLIENT_LANG
         }
         self.__ok_auth = False
-        super().__init__(timeout=timeout)
+        super().__init__(timeout=timeout, rps_config=rps_config,
+                         rps_config_parsing_mode=rps_config_parsing_mode)
         if not auto_auth:
             return
         if (e := self.auth()) is None:
@@ -225,7 +227,6 @@ class MIPSClient(gw.HTTPClient):
     
     def auth(self) -> Exception:
         "Performs client authentication"
-        # TODO implement retries for server errors
         r = self.make_request(self._prepare_auth_req())
         if (e := self.response_to_exception(r=r)) is not None:
             return e
@@ -416,7 +417,6 @@ class MIPSClient(gw.HTTPClient):
             mode = SHADOW_MODE if shadow_mode else PROD_MODE
             backlight_status = BACKLIGHT_PARAM_TO_NAME[switch_status]
             for fut in done:
-                # TODO update logging of results
                 device = fs[fut]
                 try:
                     res = fut.result()

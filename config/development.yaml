@@ -7,7 +7,7 @@ mips:
         rps: 5
       post:
         rps: 5
-  rps_config_parsing_mode: 0 # method
+  rps_config_parsing_mode: "method"
   timeout: 10
 
 secrets_yaml: "secrets/secrets.yaml"
@@ -17,6 +17,9 @@ telegram:
   log_chat_id: -4228798910
   timeout: 10
   user_to_tag: 335963598
+  rps_config:
+    rps: 1
+  rps_config_parsing_mode: "blanket"
 
 google_sheets:
   spreadsheet: "1AICxqzT_Cy-qoswGLhwsu5dSqJal26fxM4MeodBoHjI"

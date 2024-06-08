@@ -447,7 +447,6 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         if not schema:
             log.info("use_schema is False, returning untyped")
             return df, None
-        # TODO reading patch_backlight_logs fails, figure out why
         return self.typecast_df(df=df, schema=schema)
     
     def batch_update(self, sheet_id: str, requests: List[dict]) -> tuple:
