@@ -3,8 +3,8 @@ Module implements a simple gateway to send messages to telegram messenger
 """
 import atexit
 import logging
-from typing import Optional, Union
 import time
+from typing import Optional, Union
 
 import jinja2
 import requests

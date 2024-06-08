@@ -10,6 +10,8 @@ google-auth-oauthlib==1.2.0
 googleapis-common-protos==1.63.0
 httplib2==0.22.0
 idna==3.7
+jinja2==3.1.4
+MarkupSafe==2.1.5
 numpy==1.26.4
 oauthlib==3.2.2
 polars==0.20.30
