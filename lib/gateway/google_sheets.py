@@ -449,10 +449,6 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             header_offset=header_offset
         )
         log.debug("Accounted for header row")
-        log.debug("header: %s", header)
-        log.debug("rows: %s", rows)
-
-
         if not as_df:
             log.debug("as_df is False, returning as 2d list")
             return [header] + rows, None

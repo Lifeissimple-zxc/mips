@@ -86,10 +86,11 @@ class Configurator:
         Raises:
             error if any
         """  # noqa: E501
-        # env & config
-        dotenv.load_dotenv()
+        # env
+        dotenv.load_dotenv(override=True)
         if (env := os.getenv(key=ENV_KEY)) is None:
             raise ValueError(f"{ENV_KEY} is not located in the environment")
+        self.env = env
         if (log_lvl := os.getenv(key=LOG_LEVEL_KEY)) is not None:
             log_lvl = logging._nameToLevel.get(log_lvl.upper(), None)
         else:
@@ -97,13 +98,12 @@ class Configurator:
         self.log_lvl = log_lvl
         
         # configs
-        with open(file=pathlib.Path(config_dir, f"{env}.yaml"), encoding="utf-8") as _f:  # noqa: E501
+        with open(file=pathlib.Path(config_dir, f"{self.env}.yaml"), encoding="utf-8") as _f:  # noqa: E501
             config_data = yaml.safe_load(stream=_f)
-        self.secrets = config_data[SECRETS_YAML_KEY]
         self.sheets = SheetsConfig(**config_data[GSHEET_CONFIG_KEY])
 
         # secrets
-        with open(file=pathlib.Path(self.secrets), encoding="utf-8") as _f:
+        with open(file=pathlib.Path(config_data[SECRETS_YAML_KEY]), encoding="utf-8") as _f:  # noqa: E501
             secret_data = yaml.safe_load(stream=_f)
         self.mips = MIPSConfig(
             user=secret_data[MIPS_CONFIG_KEY]["user"],

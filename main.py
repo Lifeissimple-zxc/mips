@@ -18,6 +18,7 @@ log = logging.getLogger("main_logger")
 
 def main():
     "Encompasses main logic"
+    log.info("starting execution in %s", app_config.env)
     # dependencies configuration
     app = mips_app.App(
             sheets=google_sheets.GoogleSheetsGateway(
@@ -41,7 +42,6 @@ def main():
     if e is not None:
         log.error("tasks execution resulted in an error: %s", e, exc_info=True)
         raise e
-    # TODO PROD config
     # TODO documentation
 
 
