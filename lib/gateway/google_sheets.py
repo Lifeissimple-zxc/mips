@@ -601,8 +601,3 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         if e is not None:
             log.error("append failed due to batch update error: %s", e)
             return e
-
-        
-
-
-
