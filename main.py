@@ -39,7 +39,7 @@ def main():
     
     e = app.execute_tasks()
     if e is not None:
-        log.error("tasks execution resulted in an error: %s", e)
+        log.error("tasks execution resulted in an error: %s", e, exc_info=True)
         raise e
     # TODO PROD config
     # TODO documentation

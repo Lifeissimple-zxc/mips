@@ -133,6 +133,7 @@ class App:
             as_df=True,
             schema=self.cfg.sheets.tabs["control_panel"]["schema"]
         )
+        # TODO this fails when extra cols are added to contrpl panel
         if e is not None:
             return WorkflowError(f"execute_tasks failed to fetch tasks from sheet: {e}")  # noqa: E501
         log.info("fetched %s tasks from sheet", len(task_data))

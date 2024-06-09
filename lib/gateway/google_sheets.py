@@ -64,7 +64,19 @@ class GoogleSheetMapper:
         header_index = header_rownum-1
         header = sheet_values[header_index]
         # Drop rows we want to skip based on params
-        del sheet_values[header_index:header_index+1+header_offset]
+        del sheet_values[header_index:header_rownum+header_offset]
+        # All rows have values for all columns
+        if (len(sheet_values) == 0
+            or (hlen := len(header)) == len(sheet_values[0])):
+            return header, sheet_values
+        # Expand rows with None to achieve
+        log.debug(
+            "row data len %s does not match header len %s. Expanding...",
+            len(sheet_values[0]), hlen
+        )
+        for row in sheet_values:
+            for i in range(hlen-len(row)):
+                row.append(None)
         return header, sheet_values
     
     @staticmethod
@@ -337,12 +349,12 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         Args:
             req: request struct
         """
-        log.info("Calling %s method", req.methodId)
+        log.debug("Calling %s method", req.methodId)
         try:
             with rps_limiter:
                 with timer.TimerContext() as t:
                     res = req.execute()
-            log.info("Method %s responded in %s seconds", req.methodId, t.elapsed)
+            log.debug("Method %s responded in %s seconds", req.methodId, t.elapsed)
             return res
         except google_errors.HttpError as e:
             if  500 <= e.resp.status < 600:
@@ -436,16 +448,20 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             header_rownum=header_rownum,
             header_offset=header_offset
         )
-        log.info("Accounted for header row")
+        log.debug("Accounted for header row")
+        log.debug("header: %s", header)
+        log.debug("rows: %s", rows)
+
+
         if not as_df:
-            log.info("as_df is False, returning as 2d list")
+            log.debug("as_df is False, returning as 2d list")
             return [header] + rows, None
 
-        log.info("as_df is True, converting to polars")
+        log.debug("as_df is True, converting to polars")
         df = pl.DataFrame(data=rows, schema=header, orient="row")
 
         if not schema:
-            log.info("use_schema is False, returning untyped")
+            log.debug("use_schema is False, returning untyped")
             return df, None
         return self.typecast_df(df=df, schema=schema)
     
