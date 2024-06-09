@@ -27,7 +27,7 @@ handlers:
     class: "lib.internal.logger.BackupFileHandler"
     formatter: "main"
     folder: "logs"
-    file: "mips_automation.log"
+    file: "mips_auto.log"
   TGHandler:
     (): "lib.internal.logger.TGHandler"
     gw: "ext://lib.setup.TG_GW"

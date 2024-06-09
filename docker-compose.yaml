@@ -6,4 +6,8 @@ services:
     build: 
       context: "./" # folder
       dockerfile: "dockerfile"
-    
+    volumes:
+      - "./logs:/var/lib/mips_app/data"
+
+volumes:
+  mips_data:
