@@ -50,22 +50,25 @@ def main():
 if __name__ == "__main__":
     while True:
         try:
-            with timer.TimerContext() as custom_timer:
-                main()
-        except Exception as e:
-            log.error("exception in main: %s", e)
+            try:
+                with timer.TimerContext() as custom_timer:
+                    main()
+            except Exception as e:
+                log.error("exception in main: %s", e)
+            finally:
+                log.info("completed an iteartion in %s sec",
+                        custom_timer.elapsed)
+                if setup.app_config.env == setup.DEV_ENV:
+                    log.info("stopping loop because env is %s",
+                            setup.app_config.env)
+                    break
+                to_sleep = round(setup.app_config.sleep_between_runs - custom_timer.elapsed, 2)  # noqa: E501
+                log.info("sleeping for %s minutes before next iteration",
+                        round(to_sleep/60, 2))
+                time.sleep(to_sleep)
         except KeyboardInterrupt:
             log.error("received a termination signal from user")
-        finally:
-            log.info("completed an iteartion in %s sec",
-                     custom_timer.elapsed)
-            if setup.app_config.env == setup.DEV_ENV:
-                log.info("stopping loop because env is %s",
-                         setup.app_config.env)
-                break
-            to_sleep = round(setup.app_config.sleep_between_runs - custom_timer.elapsed, 2)  # noqa: E501
-            log.info("sleeping for %s minutes before next iteration",
-                     to_sleep/60)
-            time.sleep(to_sleep)
+            break
+
             
 
