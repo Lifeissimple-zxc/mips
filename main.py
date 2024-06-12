@@ -55,12 +55,13 @@ if __name__ == "__main__":
         except Exception as e:
             log.error("exception in main: %s", e)
         finally:
-            log.info("completed an iteartion in %s", custom_timer.elapsed)
+            log.info("completed an iteartion in %s sec",
+                     custom_timer.elapsed)
             if setup.app_config.env == setup.DEV_ENV:
                 log.info("stopping loop because env is %s",
                          setup.app_config.env)
                 break
-            to_sleep = setup.app_config.sleep_between_runs - custom_timer.elapsed
+            to_sleep = round(setup.app_config.sleep_between_runs - custom_timer.elapsed, 2)  # noqa: E501
             log.info("sleeping for %s minutes before next iteration",
                      to_sleep/60)
             time.sleep(to_sleep)
