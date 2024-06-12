@@ -54,6 +54,8 @@ if __name__ == "__main__":
                 main()
         except Exception as e:
             log.error("exception in main: %s", e)
+        except KeyboardInterrupt:
+            log.error("received a termination signal from user")
         finally:
             log.info("completed an iteartion in %s sec",
                      custom_timer.elapsed)
