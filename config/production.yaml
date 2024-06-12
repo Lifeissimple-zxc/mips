@@ -1,3 +1,5 @@
+sleep_between_runs: 3600
+
 mips:
   rps_config:
     method:

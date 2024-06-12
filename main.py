@@ -2,12 +2,13 @@
 Main entry point of the application.
 """
 import logging.config
+import time
 
 import yaml
 
-from lib import mips_app
+from lib import mips_app, setup
 from lib.gateway import google_sheets, mips
-from lib.setup import TG_GW, app_config
+from lib.internal import timer
 
 # logging setup
 with open("config/logging.yaml") as _f:
@@ -18,25 +19,25 @@ log = logging.getLogger("main_logger")
 
 def main():
     "Encompasses main logic"
-    log.info("starting execution in %s", app_config.env)
+    log.info("starting execution in %s", setup.app_config.env)
     # dependencies configuration
     app = mips_app.App(
             sheets=google_sheets.GoogleSheetsGateway(
-            service_acc_path=app_config.sheets.token,
-            read_rps=app_config.sheets.read_rps,
-            write_rps=app_config.sheets.write_rps,
-            request_timeout=app_config.sheets.request_timeout
+            service_acc_path=setup.app_config.sheets.token,
+            read_rps=setup.app_config.sheets.read_rps,
+            write_rps=setup.app_config.sheets.write_rps,
+            request_timeout=setup.app_config.sheets.request_timeout
         ),
         mips_api_client=mips.MIPSClient(
-            user=app_config.mips.user,
-            password=app_config.mips.password,
-            timeout=app_config.mips.timeout,
-            base_url=app_config.mips.base_url,
-            rps_config=app_config.mips.rps_config,
-            rps_config_parsing_mode=app_config.mips.rps_config_parsing_mode
+            user=setup.app_config.mips.user,
+            password=setup.app_config.mips.password,
+            timeout=setup.app_config.mips.timeout,
+            base_url=setup.app_config.mips.base_url,
+            rps_config=setup.app_config.mips.rps_config,
+            rps_config_parsing_mode=setup.app_config.mips.rps_config_parsing_mode
         ),
-        telegram=TG_GW,
-        cfg=app_config
+        telegram=setup.TG_GW,
+        cfg=setup.app_config
     )
     
     e = app.execute_tasks()
@@ -47,7 +48,21 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        log.error("exception in main: %s", e)
+    while True:
+        try:
+            with timer.TimerContext() as custom_timer:
+                main()
+        except Exception as e:
+            log.error("exception in main: %s", e)
+        finally:
+            log.info("completed an iteartion in %s", custom_timer.elapsed)
+            if setup.app_config.env == setup.DEV_ENV:
+                log.info("stopping loop because env is %s",
+                         setup.app_config.env)
+                break
+            to_sleep = setup.app_config.sleep_between_runs - custom_timer.elapsed
+            log.info("sleeping for %s minutes before next iteration",
+                     to_sleep/60)
+            time.sleep(to_sleep)
+            
+

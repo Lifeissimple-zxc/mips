@@ -124,3 +124,4 @@ class Configurator:
             rps_config=config_data[TELEGRAM_CONFIG_KEY]["rps_config"],
             rps_config_parsing_mode=config_data[TELEGRAM_CONFIG_KEY]["rps_config_parsing_mode"]
         )
+        self.sleep_between_runs = config_data["sleep_between_runs"]

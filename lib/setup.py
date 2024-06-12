@@ -4,6 +4,9 @@ Module encapsulates shared configs & dependencies
 from lib.gateway import telegram
 from lib.internal import configurator
 
+PROD_ENV = "production"
+DEV_ENV = "development"
+
 app_config = configurator.Configurator(config_dir="./config")
 TG_GW = telegram.TelegramGateway(
     bot_secret=app_config.telegram.bot_secret,
