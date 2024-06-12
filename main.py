@@ -31,6 +31,7 @@ def main():
             user=app_config.mips.user,
             password=app_config.mips.password,
             timeout=app_config.mips.timeout,
+            base_url=app_config.mips.base_url,
             rps_config=app_config.mips.rps_config,
             rps_config_parsing_mode=app_config.mips.rps_config_parsing_mode
         ),

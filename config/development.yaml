@@ -9,6 +9,7 @@ mips:
         rps: 5
   rps_config_parsing_mode: "method"
   timeout: 10
+  base_url: "http://185.45.141.19:9000/MIPS"
 
 secrets_yaml: "secrets/secrets.yaml"
 

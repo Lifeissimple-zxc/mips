@@ -78,68 +78,6 @@ class PatchBacklightAndValidateResult:
             "mode": self.mode
         }
 
-# mappers    
-def _bool_flag_to_int_param(flag: bool) -> int:
-    "Converts python bool to int that the API understands"
-    if flag:
-        return 1
-    return 0
-
-def _get_devices_param_to_request(
-    is_online: Optional[bool] = None,
-    page: Optional[int] = None) -> requests.Request:
-    if page is None:
-        page = 1
-    if is_online is not None:
-        is_online = _bool_flag_to_int_param(is_online)
-    return requests.Request(
-        method="GET",
-        url=f"{BASE_URL}/{GET_DEVICES_PATH}",
-        params={
-            "sort": "-device_name",
-            "is_online": is_online,
-            "page": page
-        }
-    )
-
-def _patch_backlight_params_to_request(
-    device_id: int,
-    switch_status: int) -> requests.Request:
-    if switch_status not in BACKLIGHT_PARAM_TO_NAME.keys():
-        raise ValueError(f"unexpected switch status: {switch_status}")
-    return requests.Request(
-        method="PUT",
-        url=f"{BASE_URL}/{PATCH_BACKLIGHT_PATH}",
-        data={
-            "type": 0,
-            "id": device_id,
-            "switchStatus": switch_status
-        }
-    )
-
-def _get_backlight_settings_params_to_request(device_id: int) -> requests.Request:  # noqa: E501
-    return requests.Request(
-        method="GET",
-        url=f"{BASE_URL}/{GET_BACKLIGHT_SETTINGS_PATH}",
-        params={
-            "type": 0,
-            "id": device_id
-        }
-    )
-
-def _get_device_task_list_params_to_request(device_id: int) -> requests.Request:
-    return requests.Request(
-        method="GET",
-        url=f"{BASE_URL}/{GET_DEVICE_TASKS_PATH}",
-        params={
-            "deviceId": device_id,
-            "page": 1,
-            "per_page": 10,
-            "perPage": 10,
-            "sort": "startTime"
-        }
-    )
-
 
 class MIPSTask:
     "Abstraction for running MIPS requests with concurrent.futures"
@@ -164,7 +102,8 @@ class MIPSTask:
 class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
-    def __init__(self, user: str, password: str, timeout: int,
+    def __init__(self, user: str, password: str,
+                 timeout: int, base_url: str,
                  auto_auth: Optional[bool] = None,
                  rps_config: Optional[dict] = None,
                  rps_config_parsing_mode: Optional[Union[int,str]] = None):
@@ -187,6 +126,7 @@ class MIPSClient(gw.HTTPClient):
             "password": password,
             "lang": CLIENT_LANG
         }
+        self.base_url = base_url
         self.__ok_auth = False
         super().__init__(timeout=timeout, rps_config=rps_config,
                          rps_config_parsing_mode=rps_config_parsing_mode)
@@ -206,7 +146,7 @@ class MIPSClient(gw.HTTPClient):
     def _prepare_auth_req(self) -> requests.PreparedRequest:
         return requests.Request(
             method="POST",
-            url=f"{BASE_URL}/{AUTH_PATH}",
+            url=f"{self.base_url}/{AUTH_PATH}",
             data=self.auth_request_body
         )
     
@@ -224,6 +164,74 @@ class MIPSClient(gw.HTTPClient):
             return gw.ServerError(msg)
         else:
             return gw.UnexpectedStatusCodeError(msg)
+        
+    # mappers
+    @staticmethod
+    def _bool_flag_to_int_param(flag: bool) -> int:
+        "Converts python bool to int that the API understands"
+        if flag:
+            return 1
+        return 0
+
+    def _get_devices_param_to_request(
+        self,
+        is_online: Optional[bool] = None,
+        page: Optional[int] = None
+    ) -> requests.Request:
+            if page is None:
+                page = 1
+            if is_online is not None:
+                is_online = self._bool_flag_to_int_param(is_online)
+            return requests.Request(
+                method="GET",
+                url=f"{self.base_url}/{GET_DEVICES_PATH}",
+                params={
+                    "sort": "-device_name",
+                    "is_online": is_online,
+                    "page": page
+                }
+            )
+
+    def _patch_backlight_params_to_request(
+        self,
+        device_id: int,
+        switch_status: int
+    ) -> requests.Request:
+            if switch_status not in BACKLIGHT_PARAM_TO_NAME.keys():
+                raise ValueError(f"unexpected switch status: {switch_status}")
+            return requests.Request(
+                method="PUT",
+                url=f"{self.base_url}/{PATCH_BACKLIGHT_PATH}",
+                data={
+                    "type": 0,
+                    "id": device_id,
+                    "switchStatus": switch_status
+                }
+            )
+
+    
+    def _get_backlight_settings_params_to_request(self,device_id: int) -> requests.Request:  # noqa: E501
+            return requests.Request(
+                method="GET",
+                url=f"{self.base_url}/{GET_BACKLIGHT_SETTINGS_PATH}",
+                params={
+                    "type": 0,
+                    "id": device_id
+                }
+            )
+
+    def _get_device_task_list_params_to_request(self, device_id: int) -> requests.Request:  # noqa: E501
+        return requests.Request(
+            method="GET",
+            url=f"{self.base_url}/{GET_DEVICE_TASKS_PATH}",
+            params={
+                "deviceId": device_id,
+                "page": 1,
+                "per_page": 10,
+                "perPage": 10,
+                "sort": "startTime"
+            }
+        )
     
     def auth(self) -> Exception:
         "Performs client authentication"
@@ -252,7 +260,7 @@ class MIPSClient(gw.HTTPClient):
             results = []
         try:
             r = self.make_request(
-                req=_get_devices_param_to_request(
+                req=self._get_devices_param_to_request(
                     is_online=is_online, page=page
                 )
             )
@@ -285,7 +293,7 @@ class MIPSClient(gw.HTTPClient):
                      device_id)
             return
         try:
-            req = _patch_backlight_params_to_request(
+            req = self._patch_backlight_params_to_request(
                 device_id=device_id, switch_status=switch_status
             )
         except Exception as e:
@@ -304,7 +312,7 @@ class MIPSClient(gw.HTTPClient):
             only_status = True
         try:
             r = self.make_request(
-                req=_get_backlight_settings_params_to_request(device_id=device_id)
+                req=self._get_backlight_settings_params_to_request(device_id=device_id)
             )
         except Exception as e:
             return None, e
@@ -324,7 +332,7 @@ class MIPSClient(gw.HTTPClient):
         "Fetches most recent tasks associated with a device id"
         try:
             r = self.make_request(
-                req=_get_device_task_list_params_to_request(device_id=device_id)
+                req=self._get_device_task_list_params_to_request(device_id=device_id)
             )
         except Exception as e:
             return None, e

@@ -42,6 +42,7 @@ class MIPSConfig:
             user: str,
             password: str,
             timeout: int,
+            base_url: str,
             rps_config: dict,
             rps_config_parsing_mode: Union[str,int]
         ):
@@ -49,6 +50,7 @@ class MIPSConfig:
         self.user = user
         self.password = password
         self.timeout = timeout
+        self.base_url = base_url
         self.rps_config = rps_config
         self.rps_config_parsing_mode = rps_config_parsing_mode
         
@@ -108,6 +110,7 @@ class Configurator:
         self.mips = MIPSConfig(
             user=secret_data[MIPS_CONFIG_KEY]["user"],
             password=secret_data[MIPS_CONFIG_KEY]["password"],
+            base_url=config_data[MIPS_CONFIG_KEY]["base_url"],
             timeout=config_data[MIPS_CONFIG_KEY]["timeout"],
             rps_config=config_data[MIPS_CONFIG_KEY]["rps_config"],
             rps_config_parsing_mode=config_data[MIPS_CONFIG_KEY]["rps_config_parsing_mode"]
