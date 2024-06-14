@@ -63,6 +63,7 @@ class TelegramConfig:
         chat_id: int,
         log_chat_id: int,
         timeout: int,
+        use_session: bool,
         user_to_tag: int,
         rps_config: dict,
         rps_config_parsing_mode: Union[str,int]
@@ -72,6 +73,7 @@ class TelegramConfig:
         self.chat_id = chat_id
         self.log_chat_id = log_chat_id
         self.timeout = timeout
+        self.use_session = use_session
         self.user_to_tag = user_to_tag
         self.rps_config = rps_config
         self.rps_config_parsing_mode = rps_config_parsing_mode
@@ -120,6 +122,7 @@ class Configurator:
             chat_id=config_data[TELEGRAM_CONFIG_KEY]["chat_id"],
             log_chat_id=config_data[TELEGRAM_CONFIG_KEY]["log_chat_id"],
             timeout=config_data[TELEGRAM_CONFIG_KEY]["timeout"],
+            use_session=config_data[TELEGRAM_CONFIG_KEY]["use_session"],
             user_to_tag=config_data[TELEGRAM_CONFIG_KEY]["user_to_tag"],
             rps_config=config_data[TELEGRAM_CONFIG_KEY]["rps_config"],
             rps_config_parsing_mode=config_data[TELEGRAM_CONFIG_KEY]["rps_config_parsing_mode"]

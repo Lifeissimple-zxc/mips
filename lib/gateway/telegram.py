@@ -1,7 +1,6 @@
 """
 Module implements a simple gateway to send messages to telegram messenger
 """
-import atexit
 import logging
 import time
 from typing import Optional, Union
@@ -32,7 +31,8 @@ class TooManyRequestsError(Exception):
 class TelegramGateway(gw.HTTPClient):
     "Sends telegram messages"
     def __init__(self, bot_secret: str,
-                 chat_id: int, log_chat_id: int, timeout: int,
+                 chat_id: int, log_chat_id: int,
+                 timeout: int, use_session: bool,
                  rps_config: Optional[dict] = None,
                  rps_config_parsing_mode: Optional[Union[int,str]] = None):
         "Constructor"
@@ -41,12 +41,14 @@ class TelegramGateway(gw.HTTPClient):
             base_url=BASE_URL,
             send_msg_endpoint=SEND_MSG_ENDPOINT
         )
-        super().__init__(timeout=timeout, rps_config=rps_config,
-                         rps_config_parsing_mode=rps_config_parsing_mode)
+        super().__init__(
+            timeout=timeout,
+            use_session=use_session,
+            rps_config=rps_config,
+            rps_config_parsing_mode=rps_config_parsing_mode
+        )
         self.base_message_data = {"chat_id": chat_id}
         self.log_message_data = {"chat_id": log_chat_id}
-        self.sesh = requests.session()
-        atexit.register(self.sesh.close)
     
     @staticmethod
     def response_to_exception(r: requests.Response) -> Exception:

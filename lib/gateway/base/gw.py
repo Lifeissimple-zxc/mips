@@ -43,9 +43,12 @@ class HTTPClient:
     "Wrapper on top requests module to interact with http APIs"
 
     def __init__(self, timeout: int,
+                 use_session: Optional[bool] = None,
                  rps_config: Optional[dict] = None,
                  rps_config_parsing_mode: Optional[Union[int,str]] = None):
         "Constructor"
+        if use_session is None:
+            use_session = True
         log.debug(
             "instantiating HTTP client with timeout %s, rps config %s and parsing mode %s",
             timeout, rps_config, rps_config_parsing_mode
@@ -53,10 +56,13 @@ class HTTPClient:
         self.rps_by_method = None
         self.base_rps_limiter = None
         self.timeout = timeout
-        self.sesh = requests.session()
+        self.sesh = None
         if rps_config is not None and rps_config_parsing_mode is not None:
             self._parse_rps_config(cfg=rps_config, mode=rps_config_parsing_mode)
-        atexit.register(self.sesh.close)
+        if use_session:
+            log.debug("instantiating gw with session")
+            self.sesh = requests.session()
+            atexit.register(self.sesh.close)
 
     @staticmethod
     def _parse_mode(mode: Union[int,str]) -> int:
@@ -115,17 +121,18 @@ class HTTPClient:
         limiter: Optional[rps_limiter.ThreadingLimiter] = None
     ) -> requests.Response:
         log.debug("making %s req to %s", req.method, req.url)
+        sesh = self.sesh if self.sesh is not None else requests.session()
         if limiter is None:
             with timer.TimerContext() as t:
-                r = self.sesh.send(
-                    request=self.sesh.prepare_request(request=req),
+                r = sesh.send(
+                    request=sesh.prepare_request(request=req),
                     timeout=self.timeout
                 )
         else:
             with limiter:
                 with timer.TimerContext() as t:
-                    r = self.sesh.send(
-                        request=self.sesh.prepare_request(request=req),
+                    r = sesh.send(
+                        request=sesh.prepare_request(request=req),
                         timeout=self.timeout
                     )
         log.debug(

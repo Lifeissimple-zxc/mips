@@ -19,6 +19,7 @@ telegram:
   chat_id: -4228798910
   log_chat_id: -4228798910
   timeout: 10
+  use_session: False
   user_to_tag: 335963598
   rps_config:
     rps: 1

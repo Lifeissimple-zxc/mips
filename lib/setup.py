@@ -13,7 +13,9 @@ TG_GW = telegram.TelegramGateway(
     chat_id=app_config.telegram.chat_id,
     log_chat_id=app_config.telegram.log_chat_id,
     timeout=app_config.telegram.timeout,
+    use_session=app_config.telegram.use_session,
     rps_config=app_config.telegram.rps_config,
     rps_config_parsing_mode=app_config.telegram.rps_config_parsing_mode
 )
+print("telegram session: ", TG_GW.sesh)
 
