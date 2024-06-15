@@ -98,7 +98,7 @@ class MIPSTask:
         "Cancels a task"
         self.cancelled = True
 
-
+#TODO this needs to be decoupled from session!
 class MIPSClient(gw.HTTPClient):
     "Wrapper for interacting with MIPS API endpoints"
 
@@ -238,8 +238,9 @@ class MIPSClient(gw.HTTPClient):
         r = self.make_request(self._prepare_auth_req())
         if (e := self.response_to_exception(r=r)) is not None:
             return e
-        # getting here means we are ok
         self.__ok_auth = True
+        # TODO this needs to be decoupled from session AND sesh needs to be periodically refreshed, like on every request we check time since last request and update session if needed!
+        # TODO a lock is needed here
         self.sesh.cookies = r.cookies
         log.debug("auth ok, cookies updated. len: %s", len(self.sesh.cookies.items()))  # noqa: E501
         

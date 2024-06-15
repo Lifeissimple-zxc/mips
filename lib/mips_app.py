@@ -143,10 +143,8 @@ class App:
             & (
                 # either hour matches
                 pl.col(HOURS_TO_RUN_COL).str.to_lowercase()
-                # TODO this is wrong: if users give input like 13,18 the code will actually run at 3,8,13,18
-                # It is already happening with hour 20
-                .str.contains(str(datetime.now(tz=timezone.utc).hour))
-                # all hours
+                .str.split(by=",").list.contains(str(datetime.now(tz=timezone.utc).hour))
+                # or input contains "all"
                 | pl.col(HOURS_TO_RUN_COL).str.to_lowercase().
                 str.contains(ALL_HOURS) 
             )
