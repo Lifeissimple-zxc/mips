@@ -454,7 +454,8 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             return [header] + rows, None
 
         log.debug("as_df is True, converting to polars")
-        df = pl.DataFrame(data=rows, schema=header, orient="row")
+        df = pl.DataFrame(data=rows, schema=header,
+                          orient="row", infer_schema_length=len(rows))
 
         if not schema:
             log.debug("use_schema is False, returning untyped")
