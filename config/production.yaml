@@ -6,11 +6,11 @@ mips:
       get:
         rps: 10
       put:
-        rps: 5
+        rps: 10
       post:
-        rps: 5
+        rps: 10
   rps_config_parsing_mode: "method"
-  timeout: 10
+  timeout: 20
   base_url: "http://10.38.0.2:9000/MIPS/"
 
 secrets_yaml: "secrets/secrets.yaml"
