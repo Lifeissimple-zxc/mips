@@ -6,9 +6,9 @@ mips:
       get:
         rps: 10
       put:
-        rps: 10
+        rps: 3
       post:
-        rps: 10
+        rps: 3
   rps_config_parsing_mode: "method"
   timeout: 20
   base_url: "http://10.38.0.2:9000/MIPS/"
