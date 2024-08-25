@@ -27,6 +27,7 @@ telegram:
 
 google_sheets:
   spreadsheet: "1kCZMA8c3uvFzakMv1D4BF19FKzlpOPdufTsvZUUSe7o"
+  request_timeout: 300
   tabs:
     control_panel:
       name: "control_panel"
