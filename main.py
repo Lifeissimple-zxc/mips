@@ -6,7 +6,7 @@ import time
 
 import yaml
 
-from lib import mips_app, setup
+from lib import log_cleaner, mips_app, setup
 from lib.gateway import google_sheets, mips
 from lib.internal import timer
 
@@ -62,6 +62,7 @@ if __name__ == "__main__":
                     log.info("stopping loop because env is %s",
                             setup.app_config.env)
                     break
+                log_cleaner.clean_log_files(path="./logs", delete=True)
                 to_sleep = round(setup.app_config.sleep_between_runs - custom_timer.elapsed, 2)  # noqa: E501
                 log.info("sleeping for %s minutes before next iteration",
                         round(to_sleep/60, 2))
