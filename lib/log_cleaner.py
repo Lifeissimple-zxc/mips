@@ -18,7 +18,7 @@ log = logging.getLogger("main_logger")
 RETENTION_DAYS = 7
 LOG_PATTERN = ".log."
 
-def _get_creation_time(filepath: str):
+def _get_creation_time(filepath: str) -> float:
     if platform.system() == "Windows":
         return os.path.getctime(filename=filepath)
     stat = os.stat(path=filepath)
@@ -41,11 +41,11 @@ def clean_log_files(path: str, delete=False):
     for f in search_root.iterdir():
         if LOG_PATTERN not in f.name or not f.is_file():
             continue
-        created_or_modified = int(_get_creation_time(f.absolute()))
+        created_or_modified = _get_creation_time(f.absolute())
         log.info("%s is a log file created or modified at %s",
                  f.name, created_or_modified)
-        days_elapsed = int((int(time.time()) - created_or_modified) / 3600 / 24)
-        if days_elapsed < RETENTION_DAYS:
+        days_elapsed = int((time.time() - created_or_modified) / (3600 * 24))
+        if days_elapsed <= RETENTION_DAYS:
             continue
         log.info("deletion mode is %s", delete)
         if delete:
