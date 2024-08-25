@@ -4,6 +4,7 @@ Module implements Gsheet API gateway.
 """
 import logging
 from typing import List, Optional
+import socket
 
 import google_auth_httplib2
 import httplib2
@@ -349,7 +350,7 @@ class GoogleSheetsGateway(GoogleSheetMapper):
         Args:
             req: request struct
         """
-        log.debug("Calling %s method", req.methodId)
+        log.debug("Calling %s method for %s", req.methodId, req.uri)
         try:
             with rps_limiter:
                 with timer.TimerContext() as t:
@@ -357,16 +358,21 @@ class GoogleSheetsGateway(GoogleSheetMapper):
             log.debug("Method %s responded in %s seconds", req.methodId, t.elapsed)
             return res
         except google_errors.HttpError as e:
+            log.error(
+                "%s method for %s got an error with code %s: %s",
+                req.method, req.uri, e.resp.status, e
+            )
             if  500 <= e.resp.status < 600:
-                log.error(
-                    "Got a retriable server error with code %s: %s",
-                    e.resp.status, e
-                )
                 # Triggers a retry
                 raise GoogleSheetRetriableError(
                     msg="Http error worth retrying", og_exception=e
                 )
             raise e
+        except socket.timeout as e:
+            msg = f"socked timed out for {req.method} method for {req.uri}" 
+            log.error(msg)
+            raise GoogleSheetRetriableError(msg=msg, og_exception=e)
+
 
     def _make_request(self, sheet_id: str, req: google_http.HttpRequest,
                       req_type: int) -> tuple:
