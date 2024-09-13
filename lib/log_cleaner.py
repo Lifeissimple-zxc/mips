@@ -16,12 +16,12 @@ logging.config.dictConfig(LOG_CFG)
 log = logging.getLogger("log_cleaner_logger")
 
 RETENTION_DAYS = 7
-LOG_PATTERN = ".log"
+LOG_PATTERN = ".log."
 
 def _get_creation_time(filepath: str) -> float:
     if platform.system() == "Windows":
         return os.path.getctime(filename=filepath)
-    stat = os.stat(path=filepath)
+    stat = os.stat(path=filepath).st_mtime
     try:
         return stat.st_birthtime
     except AttributeError:
@@ -42,9 +42,9 @@ def clean_log_files(path: str, delete=False):
         if LOG_PATTERN not in f.name or not f.is_file():
             continue
         created_or_modified = _get_creation_time(f.absolute())
-        log.info("%s is a log file created or modified at %s",
-                 f.name, created_or_modified)
         days_elapsed = int((time.time() - created_or_modified) / (3600 * 24))
+        log.info("%s is a log file created or modified at %s. days elapsed: %s",
+                 f.name, created_or_modified, days_elapsed)
         if days_elapsed <= RETENTION_DAYS:
             continue
         log.info("deletion mode is %s", delete)
