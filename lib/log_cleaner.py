@@ -16,7 +16,7 @@ logging.config.dictConfig(LOG_CFG)
 log = logging.getLogger("log_cleaner_logger")
 
 RETENTION_DAYS = 7
-LOG_PATTERN = ".log."
+LOG_PATTERN = ".log"
 
 def _get_creation_time(filepath: str) -> float:
     if platform.system() == "Windows":
@@ -39,7 +39,6 @@ def clean_log_files(path: str, delete=False):
     search_root = pathlib.Path(path)
     log.info("cleaning files in %s", search_root.absolute())
     for f in search_root.iterdir():
-        print(f)
         if LOG_PATTERN not in f.name or not f.is_file():
             continue
         created_or_modified = _get_creation_time(f.absolute())
