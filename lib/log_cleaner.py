@@ -13,7 +13,7 @@ import yaml
 with open("config/logging.yaml") as _f:
     LOG_CFG = yaml.safe_load(_f)
 logging.config.dictConfig(LOG_CFG)
-log = logging.getLogger("main_logger")
+log = logging.getLogger("log_cleaner_logger")
 
 RETENTION_DAYS = 7
 LOG_PATTERN = ".log."
@@ -39,6 +39,7 @@ def clean_log_files(path: str, delete=False):
     search_root = pathlib.Path(path)
     log.info("cleaning files in %s", search_root.absolute())
     for f in search_root.iterdir():
+        print(f)
         if LOG_PATTERN not in f.name or not f.is_file():
             continue
         created_or_modified = _get_creation_time(f.absolute())

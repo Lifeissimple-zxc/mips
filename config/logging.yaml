@@ -55,10 +55,15 @@ loggers:
     handlers:
       - "StreamHandler"
       - "ZZZQListenerHandler"
-    propagate: false
+    propagate: False
   backup_logger:
     level: "DEBUG"
     handlers:
       - "StreamHandler"
       - "BackupFileHandler"
-    propagate: false
+    propagate: False
+  log_cleaner_logger:
+    level: "INFO"
+    handlers:
+      - "StreamHandler"
+    propagate: False
