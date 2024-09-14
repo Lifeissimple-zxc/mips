@@ -1,7 +1,6 @@
 """
 Main entry point of the application.
 """
-import logging.config
 import os
 import pathlib
 import platform
@@ -10,10 +9,10 @@ import time
 import yaml
 
 # logging setup
-with open("config/logging.yaml") as _f:
-    LOG_CFG = yaml.safe_load(_f)
-logging.config.dictConfig(LOG_CFG)
-log = logging.getLogger("log_cleaner_logger")
+# with open("config/logging.yaml") as _f:
+#     LOG_CFG = yaml.safe_load(_f)
+# logging.config.dictConfig(LOG_CFG)
+# log = logging.getLogger("log_cleaner_logger")
 
 RETENTION_DAYS = 7
 LOG_PATTERN = ".log."
@@ -37,19 +36,17 @@ def clean_log_files(path: str, delete=False):
         delete (bool, optional): True means files are deleted. Defaults to False.
     """
     search_root = pathlib.Path(path)
-    log.info("cleaning files in %s", search_root.absolute())
+    print(f"cleaning files in {search_root.absolute()}")
     for f in search_root.iterdir():
         if LOG_PATTERN not in f.name or not f.is_file():
             continue
         created_or_modified = _get_creation_time(f.absolute())
         days_elapsed = int((time.time() - created_or_modified) / (3600 * 24))
-        log.info("%s is a log file created or modified at %s. days elapsed: %s",
-                 f.name, created_or_modified, days_elapsed)
+        print(f"{f.name} is a log file days elapsed: {days_elapsed}")
         if days_elapsed <= RETENTION_DAYS:
             continue
-        log.info("deletion mode is %s", delete)
         if delete:
-            log.info("calling .unlink on %s", f.name)
+            print(f"calling .unlink on {f.name}", )
             f.unlink()
 
         
