@@ -43,9 +43,7 @@ def clean_log_files(path: str, delete=False):
         created_or_modified = _get_creation_time(f.absolute())
         days_elapsed = int((time.time() - created_or_modified) / (3600 * 24))
         print(f"{f.name} is a log file days elapsed: {days_elapsed}")
-        if days_elapsed <= RETENTION_DAYS:
-            continue
-        if delete:
+        if days_elapsed > RETENTION_DAYS and delete:
             print(f"calling .unlink on {f.name}", )
             f.unlink()
 
